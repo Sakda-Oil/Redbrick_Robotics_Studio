@@ -1,0 +1,9 @@
+{
+  "name": "redbrick-icon-tools",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "dependencies": {
+    "sharp": "0.34.5"
+  }
+}

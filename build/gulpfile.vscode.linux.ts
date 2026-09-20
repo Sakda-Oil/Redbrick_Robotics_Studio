@@ -24,6 +24,14 @@ const commit = getVersion(root);
 
 const linuxPackageRevision = Math.floor(new Date().getTime() / 1000);
 
+function hicolorIcons(destinationPrefix: string) {
+	return gulp.src(`resources/linux/hicolor/*/apps/${product.linuxIconName}.png`, { base: 'resources/linux/hicolor' })
+		.pipe(rename(iconPath => {
+			const iconDirectory = iconPath.dirname.replaceAll('\\', '/');
+			iconPath.dirname = path.posix.join(destinationPrefix, 'usr/share/icons/hicolor', iconDirectory);
+		}));
+}
+
 function getDebPackageArch(arch: string): string {
 	switch (arch) {
 		case 'x64': return 'amd64';
@@ -68,6 +76,7 @@ function prepareDebPackage(arch: string) {
 
 		const icon = gulp.src('resources/linux/code.png', { base: '.' })
 			.pipe(rename('usr/share/pixmaps/' + product.linuxIconName + '.png'));
+		const themedIcons = hicolorIcons('');
 
 		const bash_completion = gulp.src('resources/completions/bash/code')
 			.pipe(replace('@@APPNAME@@', product.applicationName))
@@ -113,7 +122,7 @@ function prepareDebPackage(arch: string) {
 			.pipe(replace('@@NAME@@', product.applicationName))
 			.pipe(rename('DEBIAN/templates'));
 
-		const all = es.merge(control, templates, postinst, postrm, prerm, desktops, appdata, workspaceMime, icon, bash_completion, zsh_completion, code);
+		const all = es.merge(control, templates, postinst, postrm, prerm, desktops, appdata, workspaceMime, icon, themedIcons, bash_completion, zsh_completion, code);
 
 		return all.pipe(vfs.dest(destination));
 	};
@@ -178,6 +187,7 @@ function prepareRpmPackage(arch: string) {
 
 		const icon = gulp.src('resources/linux/code.png', { base: '.' })
 			.pipe(rename('BUILD/usr/share/pixmaps/' + product.linuxIconName + '.png'));
+		const themedIcons = hicolorIcons('BUILD');
 
 		const bash_completion = gulp.src('resources/completions/bash/code')
 			.pipe(replace('@@APPNAME@@', product.applicationName))
@@ -208,7 +218,7 @@ function prepareRpmPackage(arch: string) {
 		const specIcon = gulp.src('resources/linux/rpm/code.xpm', { base: '.' })
 			.pipe(rename('SOURCES/' + product.applicationName + '.xpm'));
 
-		const all = es.merge(code, desktops, appdata, workspaceMime, icon, bash_completion, zsh_completion, spec, specIcon);
+		const all = es.merge(code, desktops, appdata, workspaceMime, icon, themedIcons, bash_completion, zsh_completion, spec, specIcon);
 
 		return all.pipe(vfs.dest(getRpmBuildPath(rpmArch)));
 	};

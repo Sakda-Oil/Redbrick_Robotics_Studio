@@ -1,0 +1,29 @@
+{
+  "name": "Redbrick Dark",
+  "include": "../../theme-defaults/themes/dark_plus.json",
+  "colors": {
+    "editor.background": "#18181B",
+    "editor.foreground": "#ECECEE",
+    "sideBar.background": "#202024",
+    "activityBar.background": "#17171A",
+    "activityBar.activeBorder": "#E53935",
+    "activityBarBadge.background": "#C62828",
+    "activityBarBadge.foreground": "#FFFFFF",
+    "titleBar.activeBackground": "#291B1E",
+    "titleBar.activeForeground": "#FFFFFF",
+    "statusBar.background": "#A82026",
+    "statusBar.foreground": "#FFFFFF",
+    "statusBar.noFolderBackground": "#A82026",
+    "button.background": "#BB252C",
+    "button.foreground": "#FFFFFF",
+    "button.hoverBackground": "#D32F36",
+    "focusBorder": "#E65B60",
+    "progressBar.background": "#E65B60",
+    "tab.activeBorderTop": "#E53935",
+    "panelTitle.activeBorder": "#E53935",
+    "textLink.foreground": "#FF969B",
+    "textLink.activeForeground": "#FFBEC1",
+    "list.activeSelectionBackground": "#6B292E",
+    "list.activeSelectionForeground": "#FFFFFF"
+  }
+}

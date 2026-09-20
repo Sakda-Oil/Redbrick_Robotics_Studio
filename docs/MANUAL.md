@@ -1,217 +1,495 @@
-# คู่มือการทำงาน การติดตั้ง การพัฒนา และการ Build โปรเจกต์
-# Redbrick Robotics Studio (Code - OSS Distribution)
+# คู่มือพัฒนา แก้ไข Build และย้ายเครื่อง
 
----
+# Redbrick Robotics Studio
 
-## 1. บทนำและสถาปัตยกรรมระบบ (System Architecture)
+เอกสารนี้เป็นคู่มือสำหรับนักพัฒนาที่ต้องการ clone โปรเจกต์ไปพัฒนา ทดสอบ และสร้างแพ็กเกจบน Windows, macOS หรือ Linux โปรเจกต์นี้เป็น Code - OSS distribution ของ Redbrick Robotics Co., Ltd. และมี `redbrick-arduino` เป็น built-in extension สำหรับงาน Arduino/ESP32
 
-**Redbrick Robotics Studio** คือโปรแกรมแก้ไขโค้ดและสภาพแวดล้อมพัฒนา (IDE) ที่พัฒนาขึ้นโดยต่อยอดจากโครงการโอเพนซอร์ส **Code - OSS** (แกนหลักของ Visual Studio Code) เพื่อใช้ในการเขียนโปรแกรมหุ่นยนต์และระบบสมองกลฝังตัว เช่น **Arduino, ESP32, STM32**
+> ข้อสำคัญ: แต่ละระบบต้อง build แพ็กเกจของระบบนั้นบนเครื่องระบบเดียวกัน โดยเฉพาะ `.app`/`.dmg` ของ macOS และ installer ของ Windows ไม่ควร cross-compile จากอีกระบบ
 
-### หัวใจสำคัญของการออกแบบ (Core Principles)
-1. **ไม่แก้ไขระบบแกนหลัก (Upstream Isolation):** รักษาซอร์สโค้ดของ VS Code ให้เหมือนต้นฉบับมากที่สุด เพื่อให้สามารถอัปเดตเวอร์ชันใหม่จาก Microsoft ได้อย่างราบรื่น โดยความสามารถเฉพาะตัวของ Redbrick ทั้งหมดจะถูกสร้างเป็น **Built-in Extension (`extensions/redbrick-arduino`)** แยกต่างหาก
-2. **ภาพไอคอนต้นแบบจุดเดียว (Single Master Icon):** ใช้ไฟล์ [`Icon.png`](file:///d:/Desktop/Redbrick/IDE/Icon.png) ที่รากของโปรเจกต์เป็นต้นแบบเพียงไฟล์เดียว แล้วใช้สคริปต์อัตโนมัติแปลงเป็นไอคอนสำหรับทุก OS (Windows `.ico`, macOS `.icns`, Linux `.png`) โดยไม่มีการแก้งานปลายทางด้วยมือ
-3. **ใช้พื้นที่จัดเก็บมาตรฐานของ Arduino (Standard Storage):** โปรแกรมจะเชื่อมต่อไปยังโฟลเดอร์มาตรฐานของ Arduino โดยตรง ได้แก่:
-   * **Sketchbook:** `%USERPROFILE%\Documents\Arduino` (หรือโฟลเดอร์ OneDrive)
-   * **Cores & Tools:** `%LOCALAPPDATA%\Arduino15`
-   ทำให้สามารถใช้บอร์ดและไลบรารีร่วมกับโปรแกรม Arduino IDE 2.x ได้ทันที 100% โดยไม่ต้องลงซ้ำซ้อน
-
----
-
-## 2. โครงสร้างและหน้าที่ของไฟล์ต่าง ๆ ในโปรเจกต์
+## 1. Repository และ branch
 
 ```text
-IDE/
-├── Icon.png                          # ไฟล์ภาพไอคอนต้นแบบความละเอียดสูง (Master Branding Icon)
-├── package.json                      # การตั้งค่าชื่อแอปเวอร์ชัน dev, script build, และ dependencies
-├── product.json                      # การตั้งค่าแบรนด์ (Redbrick Robotics Studio), App ID, Open VSX Gallery
-├── TASKS.md                          # รายการบันทึกความคืบหน้าของงานแต่ละเฟส
-├── docs/                             # โฟลเดอร์จัดเก็บเอกสาร
-│   ├── ARCHITECTURE.md               # สถาปัตยกรรมของโปรเจกต์
-│   ├── ARDUINO_INTEGRATION.md        # รายละเอียดการเชื่อมโยงระบบเข้ากับ Arduino CLI
-│   ├── ROADMAP.md                    # แผนการพัฒนาฟีเจอร์ในอนาคต
-│   └── MANUAL.md                     # [เอกสารนี้] คู่มือการทำงาน การพัฒนา และการ Build
-├── build/                            # สคริปต์การแพ็กเกจโปรแกรม
-│   ├── gulpfile.extensions.ts        # ลงทะเบียน extension redbrick-arduino ให้คอมไพล์พร้อมระบบ
-│   ├── gulpfile.vscode.win32.ts      # สคริปต์สร้างไฟล์ Portable และตัวติดตั้ง Inno Setup สำหรับ Windows
-│   ├── gulpfile.vscode.linux.ts      # สคริปต์สร้างแพ็กเกจสำหรับระบบปฏิบัติการ Linux
-│   ├── lib/electron.ts               # ควบคุมเวอร์ชันและการตั้งค่า Electron
-│   └── win32/code.iss                # สคริปต์ Inno Setup สำหรับสร้าง RedbrickRoboticsStudioSetup.exe
-├── extensions/
-│   └── redbrick-arduino/             # ซอร์สโค้ดของ Built-in Extension สำหรับ Arduino
-│       ├── package.json              # กำหนดคำสั่ง (Commands), เมนู, ปุ่มลัด, ไฮไลต์ไวยากรณ์, และธีมสี
-│       ├── language-configuration.json # กฎโครงสร้างภาษาสำหรับไฟล์ .ino และ .pde
-│       ├── syntaxes/                 # TextMate Grammar สำหรับไฮไลต์ฟังก์ชันและตัวแปรของ Arduino
-│       ├── themes/redbrick-dark.json # ธีมสีเฉพาะ Redbrick Dark
-│       ├── test/                     # ชุดทดสอบ Unit Tests (ทดสอบการเลือกบอร์ด, พอร์ต, การกรอง COM)
-│       └── src/                      # ซอร์สโค้ดภาษา TypeScript
-│           ├── extension.ts          # จุดเริ่มต้นการทำงานเมื่อ Extension ถูกโหลด (Entry Point)
-│           ├── arduinoController.ts  # ตัวควบคุมหลัก จัดการสถานะบน Status Bar, Verify, Upload
-│           ├── arduinoState.ts       # จัดการสถานะ พอร์ตที่เลือก บอร์ดที่เลือก และการรีเฟรชข้อมูล
-│           ├── arduinoTypes.ts       # นิยามโครงสร้างข้อมูล (Interfaces & Types)
-│           ├── boardModel.ts         # จัดการบอร์ด แยกและรวมค่า FQBN พร้อม Dynamic Options
-│           ├── boardSelector.ts      # ระบบค้นหาและเลือกบอร์ดแบบ QuickPick
-│           ├── arduinoManager.ts     # จัดการ Core, Library, และ Board Manager URL
-│           ├── arduinoActions.ts     # ตัวสร้างเมนูด้านซ้ายบน Activity Bar
-│           ├── serialMonitorPanel.ts # หน้าต่าง Serial Monitor แบบ Interactive Webview
-│           ├── cli/
-│           │   └── arduinoCli.ts     # ติดต่อสั่งการ arduino-cli.exe แปลงผลลัพธ์ JSON และ stream log
-│           ├── platform/
-│           │   └── arduinoPaths.ts   # ตรวจหาโฟลเดอร์ Sketchbook และ Arduino15 (รองรับ OneDrive)
-│           └── workspace/
-│               ├── arduinoWorkspace.ts      # สร้างและเปิดโฟลเดอร์ Sketch
-│               ├── projectConfiguration.ts # จัดการไฟล์ .vscode/arduino.json และ IntelliSense
-│               └── exampleDocuments.ts     # จัดการเปิดตัวอย่างโค้ด (Examples)
-├── resources/                        # ทรัพยากรด้านภาพที่ถูกสร้างขึ้นสำหรับทุก OS
-│   ├── win32/                        # code.ico และภาพกราฟิกสำหรับตัวติดตั้ง Inno Setup
-│   ├── darwin/                       # code.icns สำหรับ macOS
-│   └── linux/                        # code.png และไอคอนขนาด 16px - 512px สำหรับ Linux
-├── scripts/                          # สคริปต์ช่วยเหลือในระหว่างการพัฒนา
-│   ├── generate-icons.mjs            # สร้างไอคอนทุกขนาดจาก Icon.png โดยอัตโนมัติ
-│   ├── verify-branding.mjs           # ตรวจสอบความถูกต้องของไฟล์ไอคอนและ product.json
-│   ├── code.bat / code.sh            # สคริปต์เปิดรันโปรแกรมใน Development Mode ทันที
-│   └── icon-tools/                   # โมดูลภายนอกที่ใช้ประมวลผลรูปภาพ (Sharp)
-└── src/                              # โค้ดแกนหลักของ VS Code Workbench (Upstream)
-    ├── main.ts                       # ทางเข้าของ Electron Main Process (ปรับชื่อ UserData)
-    └── vs/base/common/product.ts     # เพิ่มฟิลด์ companyName และ copyright ใน interface
+Repository: https://github.com/Sakda-Oil/Redbrick_Robotics_Studio.git
+Development branch: main
+Upstream Code - OSS: https://github.com/microsoft/vscode.git
 ```
 
----
+Clone ลง path ที่ไม่มีช่องว่างและไม่ซ้อนลึกเกินไป เพราะ native build tools บางตัวมีข้อจำกัดเรื่อง path:
 
-## 3. สิ่งที่ติดตั้งในระบบแล้ว และสิ่งที่ต้องเตรียม (Prerequisites)
+```bash
+git clone https://github.com/Sakda-Oil/Redbrick_Robotics_Studio.git
+cd Redbrick_Robotics_Studio
+git remote -v
+```
 
-### 3.1 สำหรับเครื่องที่ใช้พัฒนาและ Build โปรแกรม
-1. **Node.js (Toolchain สำหรับ VS Code):**
-   * VS Code ต้องใช้ Node.js เวอร์ชันเฉพาะตามไฟล์ `.nvmrc` คือ **Node.js 24.18.0**
-   * ในโปรเจกต์มีตัว Toolchain แบบพกพาติดตั้งไว้แล้วที่:
-     `d:\Desktop\Redbrick\IDE\.build\toolchain\node-v24.18.0-win-x64\node.exe`
-2. **Visual Studio 2022 Build Tools (บน Windows):**
-   * ต้องติดตั้ง Workload: **Desktop development with C++**
-   * มีคอมโพเนนต์ MSVC Compiler, Spectre-mitigated libraries, และ Windows 11 SDK (ติดตั้งไว้ที่ `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools`)
-3. **Git for Windows & Git LFS:** ติดตั้งสำหรับจัดการไฟล์ซอร์สโค้ดและไฟล์ภาพขนาดใหญ่
-4. **Arduino CLI / Arduino IDE:**
-   * ตรวจพบในระบบที่: `C:\Users\sakda\AppData\Local\Programs\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe`
-   * ระบบสามารถค้นพบตำแหน่งนี้และเรียกใช้ได้อัตโนมัติ
-5. **Cores & Libraries ที่มีในเครื่องปัจจุบัน:**
-   * Cores: `esp32:esp32` (v3.3.11), `arduino:avr` (v1.8.8), `stm32duino:STM32F1`, `STMicroelectronics:stm32`, `FRIENDROBOT_AVR:avr`
-   * Libraries: `Adafruit_BusIO`, `Adafruit_GFX_Library`, `Adafruit_MPU6050`, `Adafruit_SSD1306`, `BluetoothSerial`, `micro_ros_arduino`, `MPU6050` (อยู่ในโฟลเดอร์ OneDrive Documents)
+ควรเห็น `origin` เป็น repository ของ Redbrick และ `upstream` เป็น Code - OSS ถ้าไม่มี upstream ให้เพิ่มด้วย:
 
----
+```bash
+git remote add upstream https://github.com/microsoft/vscode.git
+```
 
-## 4. วิธีแก้ไขและพัฒนาโปรเจกต์ต่อ (Development Guide)
+## 2. โครงสร้างที่ต้องรู้ก่อนแก้ไข
 
-### 4.1 การตั้งค่าก่อนเริ่มทำงานในแต่ละครั้ง
-เปิด PowerShell แล้วรันคำสั่งเพื่อกำหนดให้ระบบใช้งาน Node.js v24 ของโปรเจกต์:
+```text
+Redbrick_Robotics_Studio/
+├── Icon.png                         master icon ห้ามแก้ artwork ต้นฉบับ
+├── product.json                     ชื่อโปรแกรม, App ID, bundle ID, gallery
+├── package.json                     เวอร์ชัน, dependencies และ build scripts
+├── extensions/redbrick-arduino/     Arduino built-in extension
+│   ├── package.json                 commands, settings, theme, language
+│   ├── src/                         TypeScript implementation
+│   ├── syntaxes/                    syntax highlighting ของ .ino/.pde
+│   ├── themes/                      Redbrick Dark
+│   └── test/                        unit tests
+├── resources/
+│   ├── branding/icon.png            สำเนาที่ตรวจ hash กับ Icon.png
+│   ├── win32/                       .ico และ installer artwork
+│   ├── darwin/code.icns             macOS bundle icon
+│   └── linux/                       desktop entries และ hicolor icons
+├── scripts/
+│   ├── generate-icons.mjs           สร้าง asset ทุกแพลตฟอร์มจาก Icon.png
+│   └── verify-branding.mjs          ตรวจ identity และ icon outputs
+├── build/                            Code - OSS packaging tasks
+├── src/                              Code - OSS workbench/core
+└── docs/                             architecture, roadmap และคู่มือ
+```
+
+หลักการแก้ไขคือเก็บความสามารถ Arduino ไว้ใน `extensions/redbrick-arduino` ให้มากที่สุด เพื่อลด conflict เมื่อต้องรับ upstream ใหม่ ส่วน `src/`, `build/`, `resources/` และ `product.json` แก้เฉพาะ integration/branding ที่จำเป็น
+
+## 3. Product identity ที่ต้องคงไว้
+
+ค่าหลักอยู่ใน `product.json`:
+
+| รายการ | ค่า |
+|---|---|
+| Product name | `Redbrick Robotics Studio` |
+| Company | `Redbrick Robotics Co., Ltd.` |
+| Application name | `redbrick-robotics-studio` |
+| macOS bundle ID | `com.redbrickrobotics.studio` |
+| Linux icon name | `redbrick-robotics-studio` |
+| Windows AppUserModelID | `RedbrickRobotics.Studio` |
+
+หลังแก้ branding ให้รัน:
+
+```bash
+npm run verify-branding
+```
+
+`Icon.png` ที่ root เป็น master icon เพียงไฟล์เดียว สคริปต์จะอ่านไฟล์นี้โดยไม่แก้ artwork แล้วสร้าง `.ico`, `.icns`, Linux PNG, workbench icon, extension icon และ Inno Setup artwork:
+
+```bash
+npm run generate-icons
+npm run verify-branding
+```
+
+ห้ามแก้ไฟล์ generated icon รายตัว เพราะครั้งถัดไปที่รัน `generate-icons` จะถูกเขียนทับ
+
+## 4. Prerequisites ร่วมทุกระบบ
+
+- Git
+- Node.js เวอร์ชันตรงกับ `.nvmrc` ปัจจุบันคือ `24.18.0`
+- npm ที่มากับ Node.js
+- Python 3 สำหรับ `node-gyp`; บน Python รุ่นใหม่อาจต้องติดตั้ง `setuptools`
+- RAM อย่างน้อย 8 GB; แนะนำ 16 GB ขึ้นไป
+- พื้นที่ว่างอย่างน้อย 20 GB สำหรับ source, `node_modules`, Electron และ package outputs
+- Internet สำหรับครั้งแรกที่ติดตั้ง dependencies และดาวน์โหลด Electron/built-in assets
+
+ตรวจเวอร์ชันก่อนทุกครั้ง:
+
+```bash
+node --version
+npm --version
+python --version
+git --version
+```
+
+`node --version` ต้องเป็น `v24.18.0` หากใช้ `nvm`/`nvm-windows` ให้เลือกจาก `.nvmrc` ก่อน `npm install`
+
+## 5. เตรียมเครื่อง Windows
+
+ติดตั้ง:
+
+1. Git for Windows
+2. Node.js `24.18.0` x64 หรือ arm64 ให้ตรงกับเครื่อง
+3. Python 3
+4. Visual Studio 2022 Build Tools พร้อม workload **Desktop development with C++**
+5. MSVC toolset, Windows 10/11 SDK และ Spectre-mitigated libraries ที่ตรงกับ architecture
+
+เปิด **Developer PowerShell for VS 2022** แล้ว clone repository แนะนำ path เช่น `D:\Redbrick\IDE`
+
+PowerShell บางเครื่องห้ามรัน `npm.ps1` ให้ใช้ `npm.cmd` ทุกคำสั่ง ไม่จำเป็นต้องลด Execution Policy:
+
 ```powershell
-cd D:\Desktop\Redbrick\IDE
+cd D:\Redbrick\IDE
+node --version
+npm.cmd install
+```
+
+ถ้า repository มี Node แบบ portable ใน `.build\toolchain` สามารถใช้ชั่วคราวได้ แต่ไม่ควรอ้าง path ของผู้พัฒนาคนเดิม:
+
+```powershell
 $nodeDir = Join-Path $PWD '.build\toolchain\node-v24.18.0-win-x64'
 $env:PATH = "$nodeDir;$env:PATH"
+node --version
 ```
 
-### 4.2 การแก้ไขโค้ด Extension Arduino (`extensions/redbrick-arduino`)
-เมื่อท่านแก้ไขโค้ดในโฟลเดอร์ `extensions/redbrick-arduino/src/`:
-1. **ตรวจเช็ค Error ของ TypeScript:**
-   ```powershell
-   & "D:\Desktop\Redbrick\IDE\node_modules\.bin\tsc.cmd" -p D:\Desktop\Redbrick\IDE\extensions\redbrick-arduino\tsconfig.json --noEmit
-   ```
-   *(ต้องได้ผลลัพธ์ว่างเปล่า ไม่มี Error)*
-2. **รันชุดทดสอบ Unit Tests:**
-   ```powershell
-   cd extensions/redbrick-arduino
-   npm test
-   cd ../..
-   ```
-   *(ต้องผ่านครบทั้ง 9 รายการ เช่น การกรองพอร์ต Bluetooth, การเลือกบอร์ด, การปิดพอร์ต Serial)*
-3. **คอมไพล์ Extension:**
-   ```powershell
-   npm run gulp compile-extension:redbrick-arduino
-   ```
+## 6. เตรียมเครื่อง macOS
 
-### 4.3 การเปลี่ยนโลโก้และไอคอนของโปรแกรม
-1. วางไฟล์ภาพโลโก้ใหม่ขนาดสี่เหลี่ยมจัตุรัส (แนะนำ 1024x1024 px นามสกุล `.png`) บันทึกทับไฟล์ [`Icon.png`](file:///d:/Desktop/Redbrick/IDE/Icon.png) ที่รากของโปรเจกต์
-2. รันคำสั่งสร้างไอคอนทุกขนาดอัตโนมัติ:
-   ```powershell
-   npm run generate-icons
-   ```
-3. ตรวจสอบความถูกต้องของไอคอนและ Metadata:
-   ```powershell
-   npm run verify-branding
-   ```
+ติดตั้ง Xcode Command Line Tools, Node.js ตาม `.nvmrc` และ Python 3:
 
-### 4.4 การทดลองเปิดใช้งานโปรแกรมทันที (Development Run)
-สามารถสั่งรัน Editor ขึ้นมาทดสอบการทำงานได้ทันทีด้วยคำสั่ง:
+```bash
+xcode-select --install
+nvm install 24.18.0
+nvm use 24.18.0
+python3 --version
+npm install
+```
+
+Build บน Apple Silicon ใช้ `arm64`; Intel Mac ใช้ `x64` ตรวจด้วย:
+
+```bash
+uname -m
+```
+
+การแจกจ่ายภายนอกองค์กรควรมี Apple Developer ID, code signing และ notarization หากไม่มี ลองเปิด unsigned development `.app` ได้เฉพาะการทดสอบภายในตามนโยบาย Gatekeeper ของเครื่องนั้น
+
+## 7. เตรียมเครื่อง Linux
+
+ตัวอย่าง Debian/Ubuntu:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential g++ libx11-dev libxkbfile-dev libsecret-1-dev libkrb5-dev python-is-python3 pkg-config git
+nvm install 24.18.0
+nvm use 24.18.0
+npm install
+```
+
+ถ้าจะสร้าง `.deb`/`.rpm` เพิ่มเครื่องมือ packaging:
+
+```bash
+sudo apt-get install -y fakeroot rpm
+```
+
+Linux `x64`, `arm64` และ `armhf` ต้องใช้ task ให้ตรงกับ architecture ของเครื่อง/target และ native dependencies ที่รองรับ architecture นั้น
+
+## 8. ติดตั้ง dependencies แบบทำซ้ำได้
+
+หลัง clone ใหม่ให้เริ่มด้วย:
+
+```bash
+npm install
+npm run generate-icons
+npm run verify-branding
+```
+
+โปรเจกต์ Code - OSS มี postinstall หลายชุดและ native modules จึงใช้เวลานานได้ หากเปลี่ยน Node major version ให้กลับมาใช้เวอร์ชันใน `.nvmrc` แล้วติดตั้งใหม่
+
+ใน CI ที่ต้องการยึด lockfile ใช้ `npm ci` ได้ แต่หาก upstream script ต้องปรับ dependency ตาม platform ให้ตรวจ log และใช้ `npm install` ตาม workflow ของ Code - OSS รุ่นนี้
+
+## 9. วิธีแก้ Arduino extension
+
+ไฟล์หลัก:
+
+- `src/extension.ts`: activation และ registration
+- `src/arduinoController.ts`: command orchestration, Verify, Upload, status bar
+- `src/cli/arduinoCli.ts`: เรียก Arduino CLI และ parse output
+- `src/boardSelector.ts`, `src/boardModel.ts`: ค้นหา/เลือกบอร์ดและ FQBN options
+- `src/arduinoManager.ts`: Board Manager, Library Manager, additional URLs
+- `src/serialMonitorPanel.ts`: Serial Monitor webview และ lifecycle ของพอร์ต
+- `src/arduinoCompletionProvider.ts`: Arduino suggestions/signature help
+- `src/arduinoDefinitionProvider.ts`: Ctrl+Click/F12 ไปยัง declaration/definition
+- `src/workspace/`: สร้าง project, config, IntelliSense และเปิด Examples แบบสำเนา
+
+หลังแก้ TypeScript ให้ทำสามขั้นตอน:
+
+```bash
+npm run gulp compile-extension:redbrick-arduino
+npm --prefix extensions/redbrick-arduino test
+npm run compile
+```
+
+ผล unit test ปัจจุบันต้องผ่าน 11 รายการ ถ้ามีการเพิ่ม behavior ให้เพิ่ม test ใน `extensions/redbrick-arduino/test/`
+
+การเพิ่ม command ใหม่ต้องทำครบทั้ง registration ใน TypeScript, `contributes.commands`/menus ใน `extensions/redbrick-arduino/package.json` และข้อความ localization ใน `package.nls*.json` ถ้ามีข้อความที่ผู้ใช้เห็น
+
+## 10. Development build และการเปิดโปรแกรม
+
+Build ครั้งเดียว:
+
+```bash
+npm run compile
+```
+
+Windows:
+
 ```powershell
 .\scripts\code.bat
 ```
 
----
+macOS/Linux:
 
-## 5. วิธีการ Build เพื่อนำไปใช้งานบนเครื่องอื่น (Build & Distribution)
+```bash
+./scripts/code.sh
+```
 
-มี 2 รูปแบบหลักในการนำโปรแกรมไปแจกจ่ายหรือใช้งานบนคอมพิวเตอร์เครื่องอื่น:
+โหมดพัฒนาต่อเนื่อง เปิด terminal แรก:
 
-### วิธีที่ 1: Build แบบพกพา ไม่ต้องติดตั้ง (Portable Package) - แนะนำและสะดวกที่สุด
-วิธีนี้จะได้โฟลเดอร์โปรแกรมที่พร้อมทำงาน สามารถบีบอัดเป็น `.zip` ส่งให้เครื่องอื่นแตกไฟล์ใช้งานได้ทันที
+```bash
+npm run watch
+```
 
-1. **เปิด PowerShell แล้วกำหนด PATH ให้ใช้ Node v24:**
-   ```powershell
-   cd D:\Desktop\Redbrick\IDE
-   $nodeDir = Join-Path $PWD '.build\toolchain\node-v24.18.0-win-x64'
-   $env:PATH = "$nodeDir;$env:PATH"
-   ```
-2. **รันคำสั่งคอมไพล์โปรแกรมสำหรับ Windows 64-bit:**
-   ```powershell
-   npm run gulp vscode-win32-x64
-   ```
-3. **ผลลัพธ์ที่ได้:**
-   * โปรแกรมจะถูกสร้างออกมาที่โฟลเดอร์:
-     [`D:\Desktop\Redbrick\VSCode-win32-x64`](file:///D:/Desktop/Redbrick/VSCode-win32-x64)
-   * ไฟล์เปิดใช้งานคือ: **`Redbrick Robotics Studio.exe`**
-4. **การนำไปใช้งานบนเครื่องอื่น:**
-   * คลิกขวาที่โฟลเดอร์ `VSCode-win32-x64` แล้วเลือก **Compress to ZIP file**
-   * ส่งไฟล์ `.zip` ไปยังเครื่องอื่น แตกไฟล์ แล้วดับเบิลคลิก `Redbrick Robotics Studio.exe` เพื่อเปิดใช้งานได้ทันที
+รอจนทุก watcher พร้อม แล้วเปิดอีก terminal เพื่อรัน `scripts/code.bat` หรือ `scripts/code.sh` อย่าเปิด development instance จาก packaged output เพราะจะไม่สะท้อน source ล่าสุด
 
----
+## 11. Test checklist ก่อน package
 
-### วิธีที่ 2: Build เป็นไฟล์ติดตั้ง Windows Setup (`.exe`)
-วิธีนี้จะสร้างไฟล์ติดตั้งตัวเดียว ผู้ใช้ปลายทางสามารถกด Next เพื่อติดตั้งโปรแกรมลงในระบบ Windows (สร้าง Shortcut บน Desktop และ Start Menu อัตโนมัติ)
+```bash
+npm run verify-branding
+npm run gulp compile-extension:redbrick-arduino
+npm --prefix extensions/redbrick-arduino test
+npm run compile
+git diff --check
+```
 
-1. **ตรวจสอบว่ามีโปรแกรม Inno Setup 6 ติดตั้งในเครื่อง**
-2. **รันคำสั่งสร้างตัวติดตั้ง:**
-   ```powershell
-   npm run gulp vscode-win32-x64
-   npm run gulp vscode-win32-x64-inno-updater
-   npm run gulp vscode-win32-x64-user-setup
-   ```
-3. **ผลลัพธ์ที่ได้:**
-   * ไฟล์ติดตั้งจะอยู่ที่:
-     `D:\Desktop\Redbrick\IDE\.build\win32-x64\user-setup\RedbrickRoboticsStudioSetup.exe` (ขนาดประมาณ 279 MB)
-   * สามารถนำไฟล์ `.exe` นี้ไปแจกจ่ายให้ผู้ใช้ติดตั้งได้ทันที
+จาก development instance ทดสอบอย่างน้อย:
 
----
+1. About แสดงชื่อ Redbrick Robotics Studio
+2. ไอคอนหน้าต่าง/taskbar/Dock ถูกต้อง
+3. New Arduino Project สร้าง `.ino` และ config
+4. Board selector พิมพ์ค้นหาได้
+5. Port selector เห็น USB serial port
+6. Verify ผ่านกับ Arduino Uno หรือ ESP32 ที่ติดตั้ง core แล้ว
+7. Upload ปิด Serial Monitor ก่อนใช้พอร์ต และเปิดใหม่ได้หลัง upload
+8. Serial Monitor เลือก port/baud/line ending และรับส่งข้อความได้
+9. `.ino` มี syntax colors, suggestions และ signature help
+10. Ctrl+Click/F12 ไปยัง Arduino core/library definition ได้
+11. Examples เปิดเป็น working copy และ Save ครั้งแรกถามตำแหน่งใหม่
 
-### 5.1 สิ่งที่เครื่องปลายทาง (Target Machine) ต้องมี
-เครื่องคอมพิวเตอร์เครื่องอื่นที่นำโปรแกรมไปใช้งาน:
-* **ไม่ต้องติดตั้ง Node.js**
-* **ไม่ต้องติดตั้ง Visual Studio Build Tools**
-* **ต้องการเพียง:**
-  1. ระบบปฏิบัติการ Windows 10 หรือ Windows 11 (64-bit)
-  2. ติดตั้งโปรแกรม **Arduino IDE 2.x** (แนะนำ) หรือดาวน์โหลด `arduino-cli.exe` เพื่อให้มีคอมไพเลอร์ฮาร์ดแวร์
-  3. หากโปรแกรมหา Arduino CLI ไม่เจอ ให้ไปที่เมนู **Settings (`Ctrl+,`)** พิมพ์ค้นหา `redbrickArduino.cli.path` แล้วระบุตำแหน่งของไฟล์ `arduino-cli.exe`
+## 12. สร้าง Windows portable และ installer
 
----
+ให้รันใน Windows Developer PowerShell และใช้ `npm.cmd` หากติด Execution Policy
 
-## 6. แนวทางแก้ไขปัญหาที่พบบ่อย (Troubleshooting)
+### Windows x64 portable
 
-1. **หา Arduino CLI ไม่เจอ (Unable to find Arduino CLI):**
-   * ให้เปิดหน้า Settings ด้วยคีย์ลัด `Ctrl+,`
-   * ค้นหา `redbrickArduino.cli.path` แล้วใส่ตำแหน่งของไฟล์ `arduino-cli.exe` เช่น `C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe`
-2. **คอมไพล์บอร์ด AVR แล้วติดปัญหาชื่อโฟลเดอร์ภาษาไทย:**
-   * ระบบ Redbrick ได้แก้ไขปัญหานี้ให้แล้ว โดยกำหนดให้ build artifacts ไปสร้างในไดเรกทอรี Temp ของระบบด้วย Hashed path สากล ทำให้ชื่อโฟลเดอร์ภาษาไทยไม่ส่งผลต่อคอมไพเลอร์ avr-gcc
-3. **อัปโหลด ESP32 ไม่ผ่าน หรือ Port ไม่ตอบสนอง:**
-   * ขณะที่โปรแกรมแสดงข้อความกำลังเชื่อมต่อ (Connecting.....) ให้กดปุ่ม **BOOT** บนบอร์ด ESP32 ค้างไว้ 2-3 วินาที
-   * หากพอร์ตถูกใช้งานอยู่ ระบบของ Redbrick จะตัดการเชื่อมต่อ Serial Monitor โดยอัตโนมัติก่อนเริ่มอัปโหลดเพื่อป้องกันพอร์ตชนกัน
-4. **ปัญหาการ Push ขึ้น GitHub ครั้งแรก:**
-   * โปรเจกต์นี้เริ่มต้นด้วย Shallow Clone จาก VS Code หากต้องการ Push ขึ้น GitHub Repository ใหม่ ต้องใช้ Root Commit เพื่อไม่ให้ GitHub ปฏิเสธการ Unpack ข้อมูล
+```powershell
+npm.cmd run gulp vscode-win32-x64
+```
 
----
-*จัดทำขึ้นสำหรับโครงการ Redbrick Robotics Studio*
+ผลลัพธ์อยู่ข้าง repository:
+
+```text
+..\VSCode-win32-x64\Redbrick Robotics Studio.exe
+```
+
+### Windows arm64 portable
+
+```powershell
+npm.cmd run gulp vscode-win32-arm64
+```
+
+### Installer แบบติดตั้งเฉพาะผู้ใช้
+
+ต้องสร้าง portable และใส่ไอคอนให้ Inno updater ก่อน:
+
+```powershell
+npm.cmd run gulp vscode-win32-x64
+npm.cmd run gulp vscode-win32-x64-inno-updater
+npm.cmd run gulp vscode-win32-x64-user-setup
+```
+
+ผลลัพธ์:
+
+```text
+.build\win32-x64\user-setup\RedbrickRoboticsStudioSetup.exe
+```
+
+### Installer แบบติดตั้งทั้งเครื่อง
+
+```powershell
+npm.cmd run gulp vscode-win32-x64
+npm.cmd run gulp vscode-win32-x64-inno-updater
+npm.cmd run gulp vscode-win32-x64-system-setup
+```
+
+ผลลัพธ์:
+
+```text
+.build\win32-x64\system-setup\RedbrickRoboticsStudioSetup.exe
+```
+
+ก่อนแจกจริงให้ sign executable/installer ด้วย certificate ของ Redbrick; `--sign` ต้องใช้ signing environment/credentials ที่องค์กรตั้งค่าไว้
+
+## 13. สร้าง macOS application
+
+Apple Silicon:
+
+```bash
+npm run gulp vscode-darwin-arm64
+```
+
+Intel:
+
+```bash
+npm run gulp vscode-darwin-x64
+```
+
+ผลลัพธ์อยู่ข้าง repository:
+
+```text
+../VSCode-darwin-arm64/Redbrick Robotics Studio.app
+../VSCode-darwin-x64/Redbrick Robotics Studio.app
+```
+
+ตรวจ bundle:
+
+```bash
+plutil -p "../VSCode-darwin-arm64/Redbrick Robotics Studio.app/Contents/Info.plist"
+codesign --verify --deep --strict "../VSCode-darwin-arm64/Redbrick Robotics Studio.app"
+```
+
+สำหรับ release สาธารณะให้ทำ code signing, hardened runtime, notarization และ DMG บน macOS ด้วย certificate ของ Redbrick ขั้นตอน CI upstream สำหรับ DMG อยู่ใน `build/azure-pipelines/darwin/`; อย่าแจก unsigned DMG เป็น production
+
+## 14. สร้าง Linux application และ packages
+
+### Portable directory
+
+```bash
+npm run gulp vscode-linux-x64
+```
+
+architecture อื่น:
+
+```bash
+npm run gulp vscode-linux-arm64
+npm run gulp vscode-linux-armhf
+```
+
+ผลลัพธ์ตัวอย่าง:
+
+```text
+../VSCode-linux-x64/bin/redbrick-robotics-studio
+```
+
+### Debian package
+
+```bash
+npm run gulp vscode-linux-x64-prepare-deb
+npm run gulp vscode-linux-x64-build-deb
+```
+
+### RPM package
+
+```bash
+npm run gulp vscode-linux-x64-prepare-rpm
+npm run gulp vscode-linux-x64-build-rpm
+```
+
+package จะใช้ `resources/linux/code.desktop`, URL handler, AppStream metadata และ hicolor icons ชื่อ `redbrick-robotics-studio` ให้ตรวจหลังติดตั้ง:
+
+```bash
+grep -E '^(Name|Exec|Icon)=' /usr/share/applications/redbrick-robotics-studio.desktop
+find /usr/share/icons/hicolor -path '*apps/redbrick-robotics-studio.png'
+```
+
+## 15. การนำไปใช้บนเครื่องผู้ใช้
+
+เครื่องปลายทางไม่ต้องมี Node.js, compiler หรือ source code หากใช้ packaged build แต่สำหรับงาน Arduino ต้องมีอย่างใดอย่างหนึ่ง:
+
+- Arduino IDE 2.x ที่มี Arduino CLI ภายใน หรือ
+- `arduino-cli` ใน `PATH` หรือ
+- ตั้ง `redbrickArduino.cli.path` ไปยัง executable
+
+Redbrick ใช้ Arduino ecosystem เดิม ไม่สร้าง store แยก:
+
+| ระบบ | Sketchbook โดยทั่วไป | Arduino data/packages โดยทั่วไป |
+|---|---|---|
+| Windows | `%USERPROFILE%\Documents\Arduino` | `%LOCALAPPDATA%\Arduino15` |
+| macOS | `~/Documents/Arduino` | `~/Library/Arduino15` |
+| Linux | `~/Arduino` | `~/.arduino15` |
+
+ตำแหน่งจริงอาจเปลี่ยนได้จาก Arduino CLI configuration หรือ OneDrive จึงไม่ควร hard-code user name/path ใน source
+
+## 16. ปัญหาที่พบบ่อย
+
+### PowerShell แจ้งว่า npm.ps1 ถูก block
+
+ใช้ `npm.cmd`:
+
+```powershell
+npm.cmd run compile
+```
+
+### Native module build ไม่ผ่าน
+
+ตรวจ Node ให้ตรง `.nvmrc`, Python, C++ toolchain และ SDK จากนั้นรัน install ใหม่ อย่าคัดลอก `node_modules` ข้าม OS หรือข้าม CPU architecture
+
+### Arduino CLI ไม่พบ
+
+เปิด Settings แล้วกำหนด `redbrickArduino.cli.path` หรือเพิ่ม `arduino-cli` ใน `PATH`
+
+### USB port ไม่แสดง
+
+ตรวจสาย data, driver ของ USB-UART (เช่น CP210x/CH340), Device Manager/`ls /dev/tty*`, สิทธิ์ `dialout` บน Linux และปิดโปรแกรมอื่นที่จับพอร์ต จากนั้นกด Refresh Serial Ports
+
+### ESP32 upload ไม่ได้
+
+ปิด Serial Monitor, เลือก COM/board/FQBN ให้ถูก ลด upload speed เป็น `115200` และกด BOOT ค้างระหว่าง `Connecting...` หาก pySerial แจ้ง PermissionError ให้ถอดเสียบ USB ใหม่ ตรวจ driver และปิด process ที่จับพอร์ต
+
+### Ctrl+Click หรือ autocomplete ไม่ทำงาน
+
+เปิด workspace ที่ trusted, เลือก board, รัน **Rebuild IntelliSense Configuration**, ตรวจว่า core/library ติดตั้งอยู่ใน Arduino directories แล้ว Reload Window
+
+### Build path มีอักษรไทย/ช่องว่าง
+
+แนะนำ clone source ลง path ASCII ที่สั้น เช่น `D:\Redbrick\IDE` หรือ `~/src/redbrick-ide` ตัว extension ใช้ temp build directory เพื่อช่วย Arduino toolchains แต่ Code - OSS/native packaging บางส่วนยังไวต่อ path
+
+## 17. Git workflow และรับ upstream
+
+ก่อนเริ่มงาน:
+
+```bash
+git switch main
+git pull --ff-only origin main
+git status
+```
+
+สร้าง branch สำหรับงานใหม่:
+
+```bash
+git switch -c feature/short-description
+```
+
+ก่อน commit รัน checklist ในหัวข้อ 11 แล้ว:
+
+```bash
+git add <files>
+git commit -m "feat: describe the change"
+git push -u origin feature/short-description
+```
+
+การรับ Code - OSS upstream ควรทำใน branch แยกและแก้ conflict อย่างระมัดระวัง:
+
+```bash
+git fetch upstream
+git switch -c chore/sync-code-oss
+git merge upstream/main
+```
+
+หลัง merge ต้องตรวจ branding, generated icons, built-in extension, GitHub authentication, Open VSX search และ package ทุก OS อีกครั้ง ห้าม force-push `main` โดยไม่ตกลงกับทีม
+
+## 18. Release checklist
+
+- [ ] `git status` ไม่มีไฟล์สำคัญตกหล่น
+- [ ] Node ตรง `.nvmrc`
+- [ ] `npm install`/`npm ci` ผ่านบน clean checkout
+- [ ] branding verification ผ่าน
+- [ ] extension compile และ 11 tests ผ่าน
+- [ ] full compile ผ่าน
+- [ ] Windows portable/installer เปิดได้และไอคอนถูกต้อง
+- [ ] macOS `.app` เปิดได้ Finder/Dock ใช้ Redbrick icon และผ่าน signing/notarization สำหรับ production
+- [ ] Linux launcher/taskbar ใช้ hicolor icon และ desktop entry ถูกต้อง
+- [ ] Verify/Upload/Serial Monitor ทดสอบกับ hardware จริง
+- [ ] version, changelog และ Git tag ถูกต้อง
+- [ ] เก็บ SHA-256 checksum ของ artifacts
+
+เอกสารสถาปัตยกรรมเพิ่มเติมอยู่ที่ `docs/ARCHITECTURE.md` และรายละเอียด Arduino อยู่ที่ `docs/ARDUINO_INTEGRATION.md`

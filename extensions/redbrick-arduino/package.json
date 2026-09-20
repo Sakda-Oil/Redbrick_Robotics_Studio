@@ -1,0 +1,240 @@
+{
+  "name": "redbrick-arduino",
+  "displayName": "%displayName%",
+  "description": "%description%",
+	"version": "0.9.0",
+  "publisher": "redbrickrobotics",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "icon": "media/icon.png",
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "virtualWorkspaces": false,
+    "untrustedWorkspaces": {
+      "supported": false
+    }
+  },
+  "activationEvents": [
+    "onStartupFinished",
+    "onLanguage:arduino",
+    "onCommand:redbrickArduino.newProject",
+    "onCommand:redbrickArduino.openProject",
+    "onCommand:redbrickArduino.selectBoard",
+		"onCommand:redbrickArduino.showBoardSelector",
+    "onCommand:redbrickArduino.selectPort",
+    "onCommand:redbrickArduino.verify",
+    "onCommand:redbrickArduino.upload",
+    "onCommand:redbrickArduino.installCore",
+    "onCommand:redbrickArduino.installLibrary",
+    "onCommand:redbrickArduino.addBoardManagerUrl",
+    "onCommand:redbrickArduino.boardConfiguration"
+  ],
+  "main": "./out/extension",
+  "scripts": {
+    "compile": "gulp compile-extension:redbrick-arduino",
+	"watch": "gulp watch-extension:redbrick-arduino",
+	"test": "node --test test/*.test.cjs"
+  },
+  "contributes": {
+    "grammars": [{ "language": "arduino", "scopeName": "source.arduino", "path": "./syntaxes/arduino.tmLanguage.json" }],
+    "viewsContainers": {
+      "activitybar": [{ "id": "redbrickArduino", "title": "Redbrick Arduino", "icon": "media/icon.png" }]
+    },
+    "views": {
+      "redbrickArduino": [{ "id": "redbrickArduino.actions", "name": "Arduino" }]
+    },
+    "themes": [{ "id": "Redbrick Dark", "label": "Redbrick Dark", "uiTheme": "vs-dark", "path": "./themes/redbrick-dark.json" }],
+    "configurationDefaults": {
+      "workbench.colorTheme": "Redbrick Dark",
+      "workbench.preferredDarkColorTheme": "Redbrick Dark",
+      "[arduino]": {
+        "editor.quickSuggestions": {
+          "other": "on",
+          "comments": "off",
+          "strings": "off"
+        },
+        "editor.suggestOnTriggerCharacters": true,
+        "editor.tabCompletion": "on",
+        "editor.snippetSuggestions": "top"
+      }
+    },
+    "languages": [
+      {
+        "id": "arduino",
+        "aliases": [
+          "Arduino",
+          "arduino"
+        ],
+        "extensions": [
+          ".ino",
+          ".pde"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "commands": [
+      { "command": "redbrickArduino.initialize", "title": "Initialize", "category": "Redbrick Arduino" },
+      { "command": "redbrickArduino.cliUpload", "title": "CLI Upload", "category": "Redbrick Arduino" },
+      { "command": "redbrickArduino.uploadUsingProgrammer", "title": "Upload Using Programmer", "category": "Redbrick Arduino" },
+      { "command": "redbrickArduino.cliUploadUsingProgrammer", "title": "CLI Upload Using Programmer", "category": "Redbrick Arduino" },
+      { "command": "redbrickArduino.closeSerialMonitor", "title": "Close Serial Monitor", "category": "Redbrick Arduino" },
+      { "command": "redbrickArduino.changeTimestampFormat", "title": "Change Timestamp Format", "category": "Redbrick Arduino" },
+      { "command": "redbrickArduino.rebuildIntelliSense", "title": "Rebuild IntelliSense Configuration", "category": "Redbrick Arduino" },
+      { "command": "redbrickArduino.showActions", "title": "Open Arduino Tools", "category": "Redbrick Arduino", "icon": { "light": "media/icon.png", "dark": "media/icon.png" } },
+      {
+        "command": "redbrickArduino.newProject",
+        "title": "%command.newProject%",
+        "category": "%command.category%",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "redbrickArduino.openProject",
+        "title": "%command.openProject%",
+        "category": "%command.category%",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "redbrickArduino.showCliVersion",
+        "title": "%command.showCliVersion%",
+        "category": "%command.category%"
+      },
+      {
+		"command": "redbrickArduino.showBoardSelector",
+		"title": "%command.showBoardSelector%",
+		"category": "%command.category%",
+		"icon": "$(circuit-board)"
+	  },
+	  {
+		"command": "redbrickArduino.refreshPorts",
+		"title": "%command.refreshPorts%",
+		"category": "%command.category%",
+		"icon": "$(refresh)"
+	  },
+	  {
+        "command": "redbrickArduino.selectBoard",
+        "title": "%command.selectBoard%",
+        "category": "%command.category%",
+        "icon": "$(circuit-board)"
+      },
+      {
+        "command": "redbrickArduino.selectPort",
+        "title": "%command.selectPort%",
+        "category": "%command.category%",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "redbrickArduino.verify",
+        "title": "%command.verify%",
+        "category": "%command.category%",
+        "icon": "$(check)"
+      },
+      {
+        "command": "redbrickArduino.upload",
+        "title": "%command.upload%",
+        "category": "%command.category%",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "redbrickArduino.updateIndexes",
+        "title": "%command.updateIndexes%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "redbrickArduino.addBoardManagerUrl",
+        "title": "%command.addBoardManagerUrl%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "redbrickArduino.installCore",
+        "title": "%command.installCore%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "redbrickArduino.installLibrary",
+        "title": "%command.installLibrary%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "redbrickArduino.boardConfiguration",
+        "title": "%command.boardConfiguration%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "redbrickArduino.openExample",
+        "title": "%command.openExample%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "redbrickArduino.serialMonitor",
+        "title": "%command.serialMonitor%",
+        "category": "%command.category%",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "redbrickArduino.showOutput",
+        "title": "%command.showOutput%",
+        "category": "%command.category%"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        { "command": "redbrickArduino.initialize", "when": "false" },
+        { "command": "redbrickArduino.openProject", "when": "false" },
+        { "command": "redbrickArduino.showCliVersion", "when": "false" },
+        { "command": "redbrickArduino.showBoardSelector", "when": "false" },
+        { "command": "redbrickArduino.refreshPorts", "when": "false" },
+        { "command": "redbrickArduino.updateIndexes", "when": "false" },
+        { "command": "redbrickArduino.addBoardManagerUrl", "when": "false" },
+        { "command": "redbrickArduino.boardConfiguration", "when": "false" },
+        { "command": "redbrickArduino.showOutput", "when": "false" },
+        { "command": "redbrickArduino.showActions", "when": "false" }
+      ],
+      "editor/title": [
+        { "command": "redbrickArduino.showActions", "group": "navigation@1" },
+        {
+          "command": "redbrickArduino.verify",
+          "when": "resourceExtname == .ino",
+          "group": "navigation@10"
+        },
+        {
+          "command": "redbrickArduino.upload",
+          "when": "resourceExtname == .ino",
+          "group": "navigation@11"
+		},
+		{
+		  "command": "redbrickArduino.showBoardSelector",
+		  "when": "resourceExtname == .ino",
+		  "group": "navigation@12"
+		},
+		{
+		  "command": "redbrickArduino.serialMonitor",
+		  "when": "resourceExtname == .ino",
+		  "group": "navigation@13"
+        }
+      ]
+    },
+    "keybindings": [
+      { "command": "redbrickArduino.upload", "key": "ctrl+alt+u", "mac": "cmd+alt+u" },
+      { "command": "redbrickArduino.verify", "key": "ctrl+alt+r", "mac": "cmd+alt+r" },
+      { "command": "redbrickArduino.rebuildIntelliSense", "key": "ctrl+alt+i", "mac": "cmd+alt+i" }
+    ],
+    "configuration": {
+      "title": "%configuration.title%",
+      "properties": {
+        "redbrickArduino.cli.path": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "%configuration.cli.path%"
+        }
+      }
+    }
+  },
+  "devDependencies": {
+    "@types/node": "24.x"
+  }
+}

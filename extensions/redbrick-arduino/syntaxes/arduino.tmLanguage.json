@@ -1,0 +1,8 @@
+{
+	"scopeName": "source.arduino",
+	"patterns": [
+		{ "name": "support.function.arduino", "match": "\\b(?:pinMode|digitalWrite|digitalRead|analogWrite|analogRead|delay|delayMicroseconds|millis|micros|attachInterrupt|detachInterrupt|tone|noTone|pulseIn|shiftIn|shiftOut)\\b(?=\\s*\\()" },
+		{ "name": "constant.language.arduino", "match": "\\b(?:HIGH|LOW|INPUT|OUTPUT|INPUT_PULLUP|LED_BUILTIN)\\b" },
+		{ "include": "source.cpp" }
+	]
+}

@@ -1,15 +1,18 @@
 {
-  "name": "code-oss-dev",
+  "name": "redbrick-robotics-studio-dev",
   "version": "1.139.0",
   "distro": "9edcf676f14a3185aebf09cedb58013c8348e31d",
   "author": {
-    "name": "Microsoft Corporation"
+    "name": "Redbrick Robotics Co., Ltd."
   },
   "license": "MIT",
   "main": "./out/main.js",
   "type": "module",
   "private": true,
   "scripts": {
+	"install-icon-tools": "npm install --prefix scripts/icon-tools",
+	"generate-icons": "npm run install-icon-tools --silent && node scripts/generate-icons.mjs",
+	"verify-branding": "node scripts/verify-branding.mjs",
     "test": "node -e \"console.error('Run a test script from the scripts folder, for example: ./scripts/test.sh --run <file>.'); process.exit(1)\"",
     "test-browser": "npx playwright install && node test/unit/browser/index.js",
     "test-browser-no-install": "node test/unit/browser/index.js",
@@ -288,11 +291,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/microsoft/vscode.git"
+    "url": "https://github.com/Sakda-Oil/Redbrick_Robotics_Studio.git"
   },
   "bugs": {
-    "url": "https://github.com/microsoft/vscode/issues"
+    "url": "https://github.com/Sakda-Oil/Redbrick_Robotics_Studio/issues"
   },
+  "homepage": "https://github.com/Sakda-Oil/Redbrick_Robotics_Studio#readme",
   "optionalDependencies": {
     "windows-foreground-love": "0.6.1"
   },

@@ -82,6 +82,7 @@ function buildWin32Setup(arch: string, target: string): task.CallbackTask {
 		productJson['target'] = target;
 
 		const definitions: Record<string, unknown> = {
+			CompanyName: product.companyName,
 			NameLong: product.nameLong,
 			NameShort: product.nameShort,
 			DirName: product.win32DirName,
@@ -97,6 +98,7 @@ function buildWin32Setup(arch: string, target: string): task.CallbackTask {
 			TunnelServiceMutex: product.win32TunnelServiceMutex,
 			TunnelApplicationName: product.tunnelApplicationName,
 			ApplicationName: product.applicationName,
+			SetupName: 'RedbrickRoboticsStudioSetup',
 			Arch: arch,
 			AppId: { 'x64': x64AppId, 'arm64': arm64AppId }[arch],
 			IncompatibleTargetAppId: { 'x64': product.win32x64AppId, 'arm64': product.win32arm64AppId }[arch],

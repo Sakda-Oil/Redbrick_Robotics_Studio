@@ -63,6 +63,13 @@
 
 /** Menu Bar */
 
+/* Preserve the Redbrick artwork instead of treating its opaque PNG as a monochrome mask. */
+.monaco-workbench .activitybar .monaco-action-bar .action-label[class*="activity-workbench-view-extension-redbrickArduino-"] {
+	mask: none !important;
+	-webkit-mask: none !important;
+	background: transparent url('../../../../../../../extensions/redbrick-arduino/media/icon.png') center / 24px 24px no-repeat !important;
+}
+
 .monaco-workbench .activitybar .menubar {
 	width: 100%;
 	height: 35px;
