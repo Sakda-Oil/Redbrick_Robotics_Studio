@@ -17,7 +17,7 @@
 	"serverApplicationName": "redbrick-robotics-studio-server",
 	"serverDataFolderName": ".redbrick-robotics-studio-server",
 	"tunnelApplicationName": "redbrick-robotics-studio-tunnel",
-	"win32DirName": "Redbrick Robotics Studio",
+	"win32DirName": "Redbrick",
 	"win32NameVersion": "Redbrick Robotics Studio",
 	"win32RegValueName": "RedbrickRoboticsStudio",
 	"win32x64AppId": "{{3D187DAF-E4A2-45DA-A29B-3AC2BDDEB0D1}",

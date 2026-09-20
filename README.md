@@ -49,12 +49,10 @@ The built-in extension automatically discovers Arduino CLI from Arduino IDE inst
 Run these commands in a Visual Studio Developer PowerShell with the Windows SDK `x64` tools directory on `PATH`:
 
 ```powershell
-npm run gulp vscode-win32-x64
-npm run gulp vscode-win32-x64-inno-updater
-npm run gulp vscode-win32-x64-user-setup
+.\scripts\build-windows.ps1
 ```
 
-The production application is emitted beside the repository in `VSCode-win32-x64`; the user installer is emitted to `.build/win32-x64/user-setup/RedbrickRoboticsStudioSetup.exe`.
+The script validates Node.js and branding, locates the newest Windows SDK `signtool.exe`, then builds the portable application and user installer. The production application is emitted beside the repository in `VSCode-win32-x64`; the user installer is emitted to `.build/win32-x64/user-setup/RedbrickRoboticsStudioSetup.exe`. The per-user physical installation folder is deliberately shortened to `%LOCALAPPDATA%\Redbrick` so deeply nested extension dependencies and installer temporary names remain below the Windows path limit; the displayed application name remains `Redbrick Robotics Studio`.
 
 ## Upstream and license
 

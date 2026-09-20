@@ -20,6 +20,7 @@ const expected = {
 	nameShort: 'Redbrick Robotics Studio',
 	companyName: 'Redbrick Robotics Co., Ltd.',
 	applicationName: 'redbrick-robotics-studio',
+	win32DirName: 'Redbrick',
 	darwinBundleIdentifier: 'com.redbrickrobotics.studio',
 	linuxIconName: 'redbrick-robotics-studio'
 };

@@ -269,6 +269,28 @@ git diff --check
 
 ให้รันใน Windows Developer PowerShell และใช้ `npm.cmd` หากติด Execution Policy
 
+วิธีแนะนำสำหรับเครื่องปัจจุบันและเครื่องพัฒนาเครื่องอื่นคือใช้สคริปต์ซึ่งตรวจ Node.js ตาม `.nvmrc` และค้นหา Windows SDK `signtool.exe` อัตโนมัติ:
+
+```powershell
+cd D:\Redbrick\IDE
+npm.cmd install
+.\scripts\build-windows.ps1
+```
+
+คำสั่งเดียวจะสร้างทั้ง portable x64 และ user installer หากต้องการเฉพาะ portable:
+
+```powershell
+.\scripts\build-windows.ps1 -Installer none
+```
+
+สำหรับ Windows ARM64:
+
+```powershell
+.\scripts\build-windows.ps1 -Architecture arm64
+```
+
+โฟลเดอร์ติดตั้งแบบ user ใช้ path สั้น `%LOCALAPPDATA%\Redbrick` เพื่อไม่ให้ dependency paths ที่ซ้อนลึกและชื่อไฟล์ชั่วคราวของ installer เกินข้อจำกัดของ Windows ขณะที่ชื่อใน Start Menu, shortcut, About และชื่อ executable ยังคงเป็น `Redbrick Robotics Studio`
+
 ### Windows x64 portable
 
 ```powershell

@@ -42,11 +42,18 @@ SignTool=esrp
 #endif
 
 #if "user" == InstallTarget
-DefaultDirName={userpf}\{#DirName}
+// Keep per-user installs outside the additional "Programs" path segment. The
+// bundled extension graph contains legitimate deep paths, and Inno Setup needs
+// a few spare characters while renaming extracted temporary files.
+DefaultDirName={localappdata}\{#DirName}
 PrivilegesRequired=lowest
 #else
 DefaultDirName={pf}\{#DirName}
 #endif
+// Always use the current short product directory. Early development builds used
+// a longer directory whose deeply nested extension dependencies exceeded the
+// legacy Windows MoveFile path limit during installation.
+UsePreviousAppDir=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl,{#RepoDir}\build\win32\i18n\messages.en.isl" {#LocalizedLanguageFile}
