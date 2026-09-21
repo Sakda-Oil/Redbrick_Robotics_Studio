@@ -44,6 +44,10 @@ Open the Command Palette with `Ctrl+Shift+P`, type `Redbrick Arduino`, and then:
 
 The built-in extension automatically discovers Arduino CLI from Arduino IDE installations and uses the same Arduino sketchbook, core, board-package, and library locations. The CLI executable can be overridden with the `redbrickArduino.cli.path` setting.
 
+## Extension gallery
+
+Redbrick Robotics Studio uses the vendor-neutral [Open VSX Registry](https://open-vsx.org/) rather than Microsoft Visual Studio Marketplace. Search results, publishers, download counts, rankings, and available extensions can therefore differ from the Microsoft Visual Studio Code application. The Open VSX package format is supported directly; Microsoft Marketplace signature verification is not applied to Open VSX downloads because the two registries do not publish compatible signature artifacts.
+
 ## Package on Windows
 
 Run these commands in a Visual Studio Developer PowerShell with the Windows SDK `x64` tools directory on `PATH`:

@@ -29,6 +29,9 @@ for (const [key, value] of Object.entries(expected)) {
 	assert.equal(product[key], value, `Unexpected product.${key}`);
 }
 
+assert.equal(product.extensionsGallery?.serviceUrl, 'https://open-vsx.org/vscode/gallery', 'Unexpected extension gallery');
+assert.equal(product.extensionsGallery?.verifySignature, false, 'Open VSX must not use the Microsoft Marketplace signature verifier');
+
 const requiredAssets = [
 	'resources/branding/icon.png',
 	'resources/win32/code.ico',

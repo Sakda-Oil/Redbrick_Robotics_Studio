@@ -461,6 +461,12 @@ npm.cmd run compile
 
 เปิด workspace ที่ trusted, เลือก board, รัน **Rebuild IntelliSense Configuration**, ตรวจว่า core/library ติดตั้งอยู่ใน Arduino directories แล้ว Reload Window
 
+### ผลค้นหา Extensions ไม่เหมือน Microsoft VS Code
+
+Redbrick Robotics Studio ใช้ Open VSX (`https://open-vsx.org`) เป็น extension registry ดังนั้นรายการส่วนขยาย ลำดับผลค้นหา publisher ยอดดาว และยอดดาวน์โหลดอาจต่างจาก Microsoft Visual Studio Marketplace ซึ่งสงวนการเข้าถึงไว้สำหรับผลิตภัณฑ์ตระกูล Visual Studio ห้ามเปลี่ยน `product.json` ให้ชี้ไป Microsoft Marketplace เพื่อแจกจ่ายโปรแกรม หาก Open VSX ไม่มีส่วนขยายที่ต้องการ ให้ตรวจ license ของผู้สร้างก่อนติดตั้งไฟล์ VSIX จากแหล่งที่เชื่อถือได้
+
+ค่า `extensionsGallery.verifySignature` ใน `product.json` ต้องเป็น `false` เพราะตัวตรวจลายเซ็นของ Microsoft Marketplace ไม่รองรับ signature artifact ของ Open VSX หากเปิดเป็น `true` การติดตั้งอาจแจ้งว่าไม่สามารถตรวจสอบลายเซ็นได้ แม้ไฟล์ส่วนขยายดาวน์โหลดสำเร็จ
+
 ### Build path มีอักษรไทย/ช่องว่าง
 
 แนะนำ clone source ลง path ASCII ที่สั้น เช่น `D:\Redbrick\IDE` หรือ `~/src/redbrick-ide` ตัว extension ใช้ temp build directory เพื่อช่วย Arduino toolchains แต่ Code - OSS/native packaging บางส่วนยังไวต่อ path

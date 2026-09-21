@@ -151,6 +151,7 @@ export interface IProductConfiguration {
 		readonly nlsBaseUrl: string;
 		readonly accessSKUs?: string[];
 		readonly accessScopes?: string[];
+		readonly verifySignature?: boolean;
 	};
 
 	readonly agentSdks?: { readonly [packageId: string]: IAgentSdkProductConfig };
