@@ -2,7 +2,7 @@
   "name": "redbrick-arduino",
   "displayName": "%displayName%",
   "description": "%description%",
-	"version": "0.9.0",
+	"version": "0.10.0",
   "publisher": "redbrickrobotics",
   "license": "MIT",
   "engines": {
@@ -23,6 +23,9 @@
     "onLanguage:arduino",
     "onCommand:redbrickArduino.newProject",
     "onCommand:redbrickArduino.openProject",
+	"onCommand:redbrickArduino.configureRaspberryPi",
+	"onCommand:redbrickArduino.selectUploadMode",
+	"onCommand:redbrickArduino.testRaspberryPi",
     "onCommand:redbrickArduino.selectBoard",
 		"onCommand:redbrickArduino.showBoardSelector",
     "onCommand:redbrickArduino.selectPort",
@@ -77,6 +80,9 @@
       }
     ],
     "commands": [
+	  { "command": "redbrickArduino.selectUploadMode", "title": "%command.selectUploadMode%", "category": "%command.category%", "icon": "$(remote)" },
+	  { "command": "redbrickArduino.configureRaspberryPi", "title": "%command.configureRaspberryPi%", "category": "%command.category%", "icon": "$(settings-gear)" },
+	  { "command": "redbrickArduino.testRaspberryPi", "title": "%command.testRaspberryPi%", "category": "%command.category%", "icon": "$(debug-disconnect)" },
       { "command": "redbrickArduino.initialize", "title": "Initialize", "category": "Redbrick Arduino" },
       { "command": "redbrickArduino.cliUpload", "title": "CLI Upload", "category": "Redbrick Arduino" },
       { "command": "redbrickArduino.uploadUsingProgrammer", "title": "Upload Using Programmer", "category": "Redbrick Arduino" },
@@ -230,6 +236,52 @@
           "default": "",
           "scope": "machine",
           "description": "%configuration.cli.path%"
+		},
+		"redbrickArduino.upload.mode": {
+		  "type": "string",
+		  "enum": ["local", "raspberryPi"],
+		  "enumDescriptions": ["%configuration.upload.mode.local%", "%configuration.upload.mode.raspberryPi%"],
+		  "default": "local",
+		  "scope": "machine",
+		  "description": "%configuration.upload.mode%"
+		},
+		"redbrickArduino.remote.host": {
+		  "type": "string",
+		  "default": "",
+		  "scope": "machine",
+		  "description": "%configuration.remote.host%"
+		},
+		"redbrickArduino.remote.username": {
+		  "type": "string",
+		  "default": "pi",
+		  "scope": "machine",
+		  "description": "%configuration.remote.username%"
+		},
+		"redbrickArduino.remote.sshKeyPath": {
+		  "type": "string",
+		  "default": "",
+		  "scope": "machine",
+		  "description": "%configuration.remote.sshKeyPath%"
+		},
+		"redbrickArduino.remote.sshPort": {
+		  "type": "number",
+		  "minimum": 1,
+		  "maximum": 65535,
+		  "default": 22,
+		  "scope": "machine",
+		  "description": "%configuration.remote.sshPort%"
+		},
+		"redbrickArduino.remote.cliPath": {
+		  "type": "string",
+		  "default": "arduino-cli",
+		  "scope": "machine",
+		  "description": "%configuration.remote.cliPath%"
+		},
+		"redbrickArduino.remote.temporaryRoot": {
+		  "type": "string",
+		  "default": "/tmp/redbrick-arduino",
+		  "scope": "machine",
+		  "description": "%configuration.remote.temporaryRoot%"
         }
       }
     }

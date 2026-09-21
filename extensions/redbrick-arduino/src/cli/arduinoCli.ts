@@ -7,6 +7,7 @@ import { spawn } from 'child_process';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import * as vscode from 'vscode';
+import { ArduinoUploadMode, RaspberryPiService } from '../remote/raspberryPiService';
 
 export interface IArduinoCliResult {
 	readonly stdout: string;
@@ -20,7 +21,10 @@ interface IArduinoCliRunOptions {
 }
 
 export class ArduinoCli {
-	constructor(private readonly output: vscode.OutputChannel) { }
+	constructor(private readonly output: vscode.OutputChannel, private readonly raspberryPi?: RaspberryPiService) { }
+
+	get uploadMode(): ArduinoUploadMode { return this.raspberryPi?.uploadMode ?? 'local'; }
+	get isRemoteMode(): boolean { return this.uploadMode === 'raspberryPi'; }
 
 	resolveExecutable(): string {
 		const configured = vscode.workspace.getConfiguration('redbrickArduino').get<string>('cli.path')?.trim();
@@ -56,6 +60,9 @@ export class ArduinoCli {
 	}
 
 	run(args: readonly string[], token?: vscode.CancellationToken, cwd?: string, options: IArduinoCliRunOptions = {}): Promise<IArduinoCliResult> {
+		if (this.raspberryPi?.isEnabled) {
+			return this.raspberryPi.runCli(args, token, options);
+		}
 		const executable = this.resolveExecutable();
 		const revealOutput = options.revealOutput ?? true;
 		const streamOutput = options.streamOutput ?? true;

@@ -8,6 +8,9 @@ export class ArduinoActions implements vscode.TreeDataProvider<vscode.TreeItem> 
 	getTreeItem(item: vscode.TreeItem): vscode.TreeItem { return item; }
 	getChildren(): vscode.TreeItem[] {
 		return [
+			['selectUploadMode', vscode.l10n.t('Upload Mode'), 'remote'],
+			['configureRaspberryPi', vscode.l10n.t('Configure Raspberry Pi'), 'settings-gear'],
+			['testRaspberryPi', vscode.l10n.t('Test Raspberry Pi Connection'), 'debug-disconnect'],
 			['installCore', vscode.l10n.t('Board Manager'), 'package'],
 			['selectBoard', vscode.l10n.t('Change Board Type'), 'circuit-board'],
 			['changeTimestampFormat', vscode.l10n.t('Change Timestamp Format'), 'clock'],

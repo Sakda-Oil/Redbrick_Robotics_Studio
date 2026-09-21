@@ -45,6 +45,7 @@ export class ArduinoState implements vscode.Disposable {
 
 	get snapshot(): IArduinoStateSnapshot {
 		return {
+			uploadMode: this.cli.uploadMode,
 			selectedBoard: this.board,
 			selectedFqbn: this.board ? composeFqbn(this.board.fqbn, this.optionValues) : undefined,
 			selectedPort: this.port,

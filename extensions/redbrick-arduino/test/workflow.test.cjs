@@ -15,9 +15,12 @@ const projectConfiguration = fs.readFileSync(path.join(extensionRoot, 'src', 'wo
 const serialMonitor = fs.readFileSync(path.join(extensionRoot, 'src', 'serialMonitorPanel.ts'), 'utf8');
 const completionProvider = fs.readFileSync(path.join(extensionRoot, 'src', 'arduinoCompletionProvider.ts'), 'utf8');
 const definitionProvider = fs.readFileSync(path.join(extensionRoot, 'src', 'arduinoDefinitionProvider.ts'), 'utf8');
+const controller = fs.readFileSync(path.join(extensionRoot, 'src', 'arduinoController.ts'), 'utf8');
+const raspberryPiService = fs.readFileSync(path.join(extensionRoot, 'src', 'remote', 'raspberryPiService.ts'), 'utf8');
 
 test('Arduino sidebar follows the vscode-arduino command workflow without duplicate board entries', () => {
 	const expected = [
+		'selectUploadMode', 'configureRaspberryPi', 'testRaspberryPi',
 		'installCore', 'selectBoard', 'changeTimestampFormat', 'closeSerialMonitor',
 		'openExample', 'newProject', 'installLibrary', 'serialMonitor', 'selectPort',
 		'upload', 'cliUpload', 'uploadUsingProgrammer', 'cliUploadUsingProgrammer',
@@ -78,4 +81,16 @@ test('Arduino symbols support Ctrl+Click and F12 definition navigation', () => {
 	assert.match(definitionProvider, /ripgrep-universal/);
 	assert.match(definitionProvider, /Arduino15|packages/);
 	assert.match(fs.readFileSync(path.join(extensionRoot, 'src', 'extension.ts'), 'utf8'), /registerDefinitionProvider/);
+});
+
+test('Raspberry Pi remote upload reuses Arduino CLI state and uses key-only SSH', () => {
+	const properties = manifest.contributes.configuration.properties;
+	assert.deepEqual(properties['redbrickArduino.upload.mode'].enum, ['local', 'raspberryPi']);
+	assert.equal(properties['redbrickArduino.remote.password'], undefined);
+	assert.match(raspberryPiService, /BatchMode=yes/);
+	assert.match(raspberryPiService, /stageSketch/);
+	assert.match(raspberryPiService, /job-\$\{randomUUID\(\)\}/);
+	assert.match(raspberryPiService, /rm', '-rf', '--'/);
+	assert.match(controller, /this\.cli\.isRemoteMode/);
+	assert.match(controller, /remoteUploadAdapterFor/);
 });

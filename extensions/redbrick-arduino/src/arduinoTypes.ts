@@ -58,6 +58,7 @@ export interface IArduinoProjectConfiguration {
 }
 
 export interface IArduinoStateSnapshot {
+	readonly uploadMode: 'local' | 'raspberryPi';
 	readonly selectedBoard?: IArduinoBoard;
 	readonly selectedFqbn?: string;
 	readonly selectedPort?: IArduinoPort;

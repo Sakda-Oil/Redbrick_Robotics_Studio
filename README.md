@@ -44,6 +44,18 @@ Open the Command Palette with `Ctrl+Shift+P`, type `Redbrick Arduino`, and then:
 
 The built-in extension automatically discovers Arduino CLI from Arduino IDE installations and uses the same Arduino sketchbook, core, board-package, and library locations. The CLI executable can be overridden with the `redbrickArduino.cli.path` setting.
 
+### Raspberry Pi 5 Remote Upload
+
+Redbrick can keep the editor on Windows, macOS, or Linux while compiling and uploading through a USB board connected to Raspberry Pi 5. Open **Redbrick Arduino: Configure Raspberry Pi Upload**, select **Raspberry Pi**, enter the Pi host, username, and SSH private-key path, then use **Test Connection**. Board and port discovery, Board Manager, Verify, and Upload continue through the existing Arduino CLI workflow, but execute on the Pi. Passwords are never stored.
+
+Provision a Raspberry Pi with:
+
+```bash
+sudo ./scripts/setup_pi.sh
+```
+
+The first supported families are Arduino AVR, ESP32, and ESP8266. STM32 and RP2040 are routed through an OpenOCD-ready adapter boundary while continuing to use their Arduino core upload recipes.
+
 ## Extension gallery
 
 Redbrick Robotics Studio uses the vendor-neutral [Open VSX Registry](https://open-vsx.org/) rather than Microsoft Visual Studio Marketplace. Search results, publishers, download counts, rankings, and available extensions can therefore differ from the Microsoft Visual Studio Code application. The Open VSX package format is supported directly; Microsoft Marketplace signature verification is not applied to Open VSX downloads because the two registries do not publish compatible signature artifacts.

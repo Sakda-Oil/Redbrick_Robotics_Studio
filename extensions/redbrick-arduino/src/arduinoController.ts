@@ -16,33 +16,47 @@ import { ArduinoState } from './arduinoState';
 import { BoardSelector } from './boardSelector';
 import { IArduinoBoard, IArduinoPort } from './arduinoTypes';
 import { baseFqbn, composeFqbn, findBoardByFqbn, parseFqbnOptions } from './boardModel';
+import { RaspberryPiConfigurationPanel } from './remote/raspberryPiConfigurationPanel';
+import { RaspberryPiService } from './remote/raspberryPiService';
+import { remoteUploadAdapterFor } from './remote/remoteUploadAdapter';
 import { createArduinoProject, findSketchDirectory, initializeArduinoProject, openArduinoProject } from './workspace/arduinoWorkspace';
 
 export class ArduinoController implements vscode.Disposable {
 	private readonly output = vscode.window.createOutputChannel(vscode.l10n.t('Redbrick Arduino'));
-	private readonly cli = new ArduinoCli(this.output);
+	private readonly raspberryPi = new RaspberryPiService(this.output);
+	private readonly cli = new ArduinoCli(this.output, this.raspberryPi);
 	private readonly state = new ArduinoState(this.cli);
 	private readonly selector = new BoardSelector(this.state);
 	private readonly manager: ArduinoManager;
+	private readonly raspberryPiPanel: RaspberryPiConfigurationPanel;
 	private readonly monitor = new SerialMonitorPanel();
 	private readonly exampleDocuments = new ExampleDocuments();
 	private readonly boardStatus = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 101);
 	private readonly portStatus = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
 	private readonly readyStatus = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
+	private readonly uploadModeStatus = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 98);
+	private configurationRefreshHandle: NodeJS.Timeout | undefined;
 	private buildRunning = false;
 
 	constructor(private readonly context: vscode.ExtensionContext) {
 		this.manager = new ArduinoManager(this.cli, this.state, () => this.selector.show());
+		this.raspberryPiPanel = new RaspberryPiConfigurationPanel(this.raspberryPi, async () => this.scheduleStateRefresh());
 		this.boardStatus.command = 'redbrickArduino.selectBoard';
 		this.portStatus.command = 'redbrickArduino.selectPort';
 		this.boardStatus.tooltip = vscode.l10n.t('Select the Arduino board');
 		this.portStatus.tooltip = vscode.l10n.t('Select the serial port');
 		this.readyStatus.tooltip = vscode.l10n.t('Arduino board and port readiness');
+		this.uploadModeStatus.command = 'redbrickArduino.configureRaspberryPi';
+		this.uploadModeStatus.tooltip = vscode.l10n.t('Configure Local or Raspberry Pi upload');
 		this.context.subscriptions.push(this.state.onDidChange(() => this.updateStatusBar()));
+		this.context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('redbrickArduino.upload.mode') || event.affectsConfiguration('redbrickArduino.remote')) { this.scheduleStateRefresh(); }
+		}));
 		this.updateStatusBar();
 		this.boardStatus.show();
 		this.portStatus.show();
 		this.readyStatus.show();
+		this.uploadModeStatus.show();
 		void this.state.initialize().catch(error => void this.executeSafely(() => Promise.reject(error)));
 	}
 
@@ -51,6 +65,9 @@ export class ArduinoController implements vscode.Disposable {
 			['redbrickArduino.newProject', createArduinoProject],
 			['redbrickArduino.initialize', initializeArduinoProject],
 			['redbrickArduino.openProject', openArduinoProject],
+			['redbrickArduino.configureRaspberryPi', async () => this.raspberryPiPanel.show()],
+			['redbrickArduino.selectUploadMode', () => this.selectUploadMode()],
+			['redbrickArduino.testRaspberryPi', () => this.testRaspberryPi()],
 			['redbrickArduino.showCliVersion', () => this.showCliVersion()],
 			['redbrickArduino.showBoardSelector', async () => this.selector.show()],
 			['redbrickArduino.refreshPorts', () => this.state.refreshPorts()],
@@ -88,15 +105,26 @@ export class ArduinoController implements vscode.Disposable {
 	}
 
 	dispose(): void {
+		if (this.configurationRefreshHandle) { clearTimeout(this.configurationRefreshHandle); }
 		this.selector.dispose();
 		this.state.dispose();
 		this.exampleDocuments.dispose();
 		this.manager.dispose();
+		this.raspberryPiPanel.dispose();
 		this.monitor.dispose();
 		this.output.dispose();
 		this.boardStatus.dispose();
 		this.portStatus.dispose();
 		this.readyStatus.dispose();
+		this.uploadModeStatus.dispose();
+	}
+
+	private scheduleStateRefresh(): void {
+		if (this.configurationRefreshHandle) { clearTimeout(this.configurationRefreshHandle); }
+		this.configurationRefreshHandle = setTimeout(() => {
+			this.configurationRefreshHandle = undefined;
+			void this.state.initialize().catch(error => void this.executeSafely(() => Promise.reject(error)));
+		}, 250);
 	}
 
 	private async executeSafely(handler: () => Promise<void>): Promise<void> {
@@ -106,19 +134,28 @@ export class ArduinoController implements vscode.Disposable {
 			const message = error instanceof Error ? error.message : String(error);
 			this.output.appendLine(message);
 			const showOutput = vscode.l10n.t('Show Output');
-			const configure = vscode.l10n.t('Configure CLI Path');
+			const configure = this.cli.isRemoteMode ? vscode.l10n.t('Configure Raspberry Pi') : vscode.l10n.t('Configure CLI Path');
 			const selectPort = vscode.l10n.t('Select Port');
 			const portBusy = /access is denied|permissionerror|port (?:is )?busy|could not open (?:the )?(?:serial )?port|resource busy/i.test(message);
+			const piOffline = /connection timed out|connection refused|no route to host|could not resolve hostname|network is unreachable/i.test(message);
+			const authentication = /permission denied \(publickey|host key verification failed|bad permissions.*private key/i.test(message);
+			const boardMissing = /no device found|board not found|no such file or directory.*(?:tty|cu\.)/i.test(message);
+			const missingCore = /platform.*not installed|core.*not installed|unknown fqbn|discovery.*not found/i.test(message);
 			const displayMessage = portBusy
-				? vscode.l10n.t('Serial port is busy. Close Serial Monitor in Redbrick and Arduino IDE, disconnect other serial tools, reconnect the board, then select its USB port again. Details: {0}', message)
-				: vscode.l10n.t('Redbrick Arduino: {0}', message);
+				? vscode.l10n.t('Serial port is busy. Close Serial Monitor and other tools using the port, then try again. Details: {0}', message)
+				: piOffline ? vscode.l10n.t('Raspberry Pi is offline or unreachable. Check its IP address, Wi-Fi/LAN connection, and SSH service. Details: {0}', message)
+					: authentication ? vscode.l10n.t('Raspberry Pi SSH key authentication failed. Check the username, private key, and authorized_keys on the Pi. Details: {0}', message)
+						: boardMissing ? vscode.l10n.t('The USB board was not found on Raspberry Pi. Reconnect it, check the USB cable, and refresh ports. Details: {0}', message)
+							: missingCore ? vscode.l10n.t('The selected board core is missing on Raspberry Pi. Open Board Manager in Raspberry Pi mode or run setup_pi.sh. Details: {0}', message)
+								: vscode.l10n.t('Redbrick Arduino: {0}', message);
 			const action = await vscode.window.showErrorMessage(displayMessage, showOutput, portBusy ? selectPort : configure);
 			if (action === showOutput) {
 				this.output.show();
 			} else if (action === selectPort) {
 				await this.selectPort();
 			} else if (action === configure) {
-				await vscode.commands.executeCommand('workbench.action.openSettings', 'redbrickArduino.cli.path');
+				if (this.cli.isRemoteMode) { this.raspberryPiPanel.show(); }
+				else { await vscode.commands.executeCommand('workbench.action.openSettings', 'redbrickArduino.cli.path'); }
 			}
 		}
 	}
@@ -126,6 +163,21 @@ export class ArduinoController implements vscode.Disposable {
 	private async showCliVersion(): Promise<void> {
 		const result = await this.cli.run(['version']);
 		await vscode.window.showInformationMessage(result.stdout.trim());
+	}
+
+	private async selectUploadMode(): Promise<void> {
+		const selected = await vscode.window.showQuickPick([
+			{ label: vscode.l10n.t('Local'), description: vscode.l10n.t('Use USB ports connected to this computer'), value: 'local' },
+			{ label: vscode.l10n.t('Raspberry Pi'), description: vscode.l10n.t('Use Arduino CLI and USB ports on Raspberry Pi over SSH'), value: 'raspberryPi' }
+		] as const, { placeHolder: vscode.l10n.t('Select Arduino upload mode') });
+		if (!selected) { return; }
+		await vscode.workspace.getConfiguration('redbrickArduino').update('upload.mode', selected.value, vscode.ConfigurationTarget.Global);
+		if (selected.value === 'raspberryPi') { this.raspberryPiPanel.show(); }
+	}
+
+	private async testRaspberryPi(): Promise<void> {
+		const details = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Testing Raspberry Pi connection…'), cancellable: true }, (_progress, token) => this.raspberryPi.testConnection(undefined, token));
+		await vscode.window.showInformationMessage(vscode.l10n.t('Raspberry Pi connection succeeded: {0}', details.replace(/\s+/g, ' ')));
 	}
 
 	private async selectBoard(): Promise<void> {
@@ -170,11 +222,30 @@ export class ArduinoController implements vscode.Disposable {
 		if (!sketch || !board) {
 			return;
 		}
-		await this.invalidateBuild(sketch);
 		await ensureProjectConfiguration(vscode.Uri.file(sketch), board.fqbn);
+		if (this.cli.isRemoteMode) {
+			await this.verifyRemote(sketch, board);
+			return;
+		}
+		await this.invalidateBuild(sketch);
 		await this.runProgress(vscode.l10n.t('Verifying {0}…', basename(sketch)), ['compile', '--fqbn', board.fqbn, '--build-path', this.buildDirectory(sketch), sketch], sketch);
 		await this.recordBuild(sketch, board.fqbn);
 		void vscode.window.showInformationMessage(vscode.l10n.t('Arduino sketch verified successfully.'));
+	}
+
+	private async verifyRemote(sketch: string, board: IArduinoBoard): Promise<void> {
+		const adapter = remoteUploadAdapterFor(board.fqbn);
+		await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Verifying {0} on Raspberry Pi…', basename(sketch)), cancellable: true }, async (progress, token) => {
+			const session = await this.raspberryPi.stageSketch(sketch, token, message => progress.report({ message }));
+			try {
+				this.output.appendLine(vscode.l10n.t('Remote adapter: {0} ({1})', adapter.family, adapter.openOcdReady ? 'Arduino CLI / OpenOCD-ready' : adapter.id));
+				progress.report({ message: vscode.l10n.t('Compiling on Raspberry Pi…') });
+				await this.cli.run(adapter.compileArgs(board.fqbn, session.buildPath, session.sketchPath), token);
+			} finally {
+				await session.cleanup();
+			}
+		});
+		void vscode.window.showInformationMessage(vscode.l10n.t('Arduino sketch verified successfully on Raspberry Pi.'));
 	}
 
 	private async uploadWithMonitorRestore(upload: () => Promise<void>): Promise<void> {
@@ -204,6 +275,10 @@ export class ArduinoController implements vscode.Disposable {
 			if (!programmer) { return; }
 			programmerArgs.push('--programmer', programmer.id);
 		}
+		if (this.cli.isRemoteMode) {
+			await this.uploadRemote(sketch, board, port, programmerArgs, build);
+			return;
+		}
 		if (build) {
 			await this.invalidateBuild(sketch);
 			await this.runProgress(vscode.l10n.t('Compiling {0}…', basename(sketch)), ['compile', '--fqbn', board.fqbn, '--build-path', buildPath, sketch], sketch);
@@ -230,6 +305,40 @@ export class ArduinoController implements vscode.Disposable {
 			await this.runProgress(vscode.l10n.t('Retrying ESP32 upload at 115200…'), ['upload', '--port', port?.port.address ?? '', '--fqbn', safeBoard.fqbn, '--input-dir', buildPath, sketch], sketch);
 		}
 		void vscode.window.showInformationMessage(vscode.l10n.t('Arduino sketch uploaded successfully.'));
+	}
+
+	private async uploadRemote(sketch: string, board: IArduinoBoard, port: IArduinoPort | undefined, programmerArgs: readonly string[], requestedBuild: boolean): Promise<void> {
+		await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Uploading {0} through Raspberry Pi…', basename(sketch)), cancellable: true }, async (progress, token) => {
+			const session = await this.raspberryPi.stageSketch(sketch, token, message => progress.report({ message }));
+			try {
+				if (!requestedBuild) { this.output.appendLine(vscode.l10n.t('Remote CLI Upload compiles again because temporary Raspberry Pi build files are removed after every operation.')); }
+				let uploadBoard = board;
+				let adapter = remoteUploadAdapterFor(uploadBoard.fqbn);
+				this.output.appendLine(vscode.l10n.t('Remote adapter: {0} ({1})', adapter.family, adapter.openOcdReady ? 'Arduino CLI / OpenOCD-ready' : adapter.id));
+				progress.report({ message: vscode.l10n.t('Compiling on Raspberry Pi…') });
+				await this.cli.run(adapter.compileArgs(uploadBoard.fqbn, session.buildPath, session.sketchPath), token);
+				try {
+					progress.report({ message: vscode.l10n.t('Uploading to {0} on Raspberry Pi…', port?.port.address ?? vscode.l10n.t('programmer')) });
+					await this.cli.run(adapter.uploadArgs(uploadBoard.fqbn, session.buildPath, session.sketchPath, port?.port.address, programmerArgs), token);
+				} catch (error) {
+					const message = error instanceof Error ? error.message : String(error);
+					const connectionFailure = /failed to connect|no serial data received|wrong boot mode|timed out waiting for packet header|write timeout/i.test(message);
+					if (programmerArgs.length || !uploadBoard.fqbn.startsWith('esp32:') || !connectionFailure) { throw error; }
+					const retry = vscode.l10n.t('Retry at 115200');
+					const action = await vscode.window.showWarningMessage(vscode.l10n.t('ESP32 on Raspberry Pi did not enter upload mode. Hold the BOOT button, click Retry, and release BOOT when upload starts.'), { modal: true }, retry);
+					if (action !== retry) { throw error; }
+					uploadBoard = { ...uploadBoard, name: `${uploadBoard.name} (115200 safe upload)`, fqbn: composeFqbn(uploadBoard.fqbn, { ...parseFqbnOptions(uploadBoard.fqbn), UploadSpeed: '115200' }) };
+					adapter = remoteUploadAdapterFor(uploadBoard.fqbn);
+					await this.state.setBoardByFqbn(uploadBoard.fqbn, uploadBoard.name);
+					progress.report({ message: vscode.l10n.t('Recompiling ESP32 at safe upload speed…') });
+					await this.cli.run(adapter.compileArgs(uploadBoard.fqbn, session.buildPath, session.sketchPath), token);
+					await this.cli.run(adapter.uploadArgs(uploadBoard.fqbn, session.buildPath, session.sketchPath, port?.port.address, programmerArgs), token);
+				}
+			} finally {
+				await session.cleanup();
+			}
+		});
+		void vscode.window.showInformationMessage(vscode.l10n.t('Arduino sketch uploaded successfully through Raspberry Pi.'));
 	}
 
 	private async updateIndexes(): Promise<void> {
@@ -312,6 +421,10 @@ export class ArduinoController implements vscode.Disposable {
 	}
 
 	private async openSerialMonitor(): Promise<void> {
+		if (this.cli.isRemoteMode) {
+			await vscode.window.showInformationMessage(vscode.l10n.t('Remote Verify and Upload are enabled. Remote Serial Monitor is not enabled yet; use SSH or switch Upload Mode to Local.'));
+			return;
+		}
 		await this.state.refreshPorts(true);
 		const snapshot = this.state.snapshot;
 		const monitorPorts = () => this.state.snapshot.availablePorts.map(item => ({
@@ -406,5 +519,6 @@ export class ArduinoController implements vscode.Disposable {
 		this.boardStatus.text = snapshot.selectedBoard ? `$(circuit-board) ${snapshot.selectedBoard.name}` : `$(circuit-board) ${vscode.l10n.t('Select Board')}`;
 		this.portStatus.text = snapshot.selectedPort ? `$(plug) ${snapshot.selectedPort.port.address}` : snapshot.unavailablePort ? `$(warning) ${snapshot.unavailablePort} unavailable` : `$(plug) ${vscode.l10n.t('No Port')}`;
 		this.readyStatus.text = snapshot.selectedBoard && snapshot.selectedPort ? `$(pass-filled) ${vscode.l10n.t('Ready')}` : snapshot.loadingPorts ? `$(sync~spin) ${vscode.l10n.t('Detecting ports')}` : `$(circle-slash) ${vscode.l10n.t('Not Ready')}`;
+		this.uploadModeStatus.text = snapshot.uploadMode === 'raspberryPi' ? `$(remote) ${vscode.l10n.t('Raspberry Pi')}` : `$(device-desktop) ${vscode.l10n.t('Local')}`;
 	}
 }
