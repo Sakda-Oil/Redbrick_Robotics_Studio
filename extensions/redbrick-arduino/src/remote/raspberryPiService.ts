@@ -8,6 +8,7 @@ import { randomUUID } from 'crypto';
 import { existsSync } from 'fs';
 import { basename, posix } from 'path';
 import * as vscode from 'vscode';
+import { IArduinoPort } from '../arduinoTypes';
 
 export type ArduinoUploadMode = 'local' | 'raspberryPi';
 
@@ -16,7 +17,6 @@ export interface IRaspberryPiSettings {
 	readonly username: string;
 	readonly sshKeyPath: string;
 	readonly sshPort: number;
-	readonly cliPath: string;
 	readonly temporaryRoot: string;
 }
 
@@ -31,8 +31,7 @@ export interface IRemoteCommandResult {
 	readonly stderr: string;
 }
 
-export interface IRemoteSketchSession {
-	readonly sketchPath: string;
+export interface IRemoteArtifactSession {
 	readonly buildPath: string;
 	cleanup(): Promise<void>;
 }
@@ -53,48 +52,65 @@ export class RaspberryPiService {
 			username: configuration.get<string>('remote.username', 'pi').trim(),
 			sshKeyPath: configuration.get<string>('remote.sshKeyPath', '').trim(),
 			sshPort: configuration.get<number>('remote.sshPort', 22),
-			cliPath: configuration.get<string>('remote.cliPath', 'arduino-cli').trim() || 'arduino-cli',
 			temporaryRoot: configuration.get<string>('remote.temporaryRoot', '/tmp/redbrick-arduino').trim() || '/tmp/redbrick-arduino'
 		};
 	}
 
-	async runCli(args: readonly string[], token?: vscode.CancellationToken, options: IRemoteRunOptions = {}): Promise<IRemoteCommandResult> {
-		const settings = this.validate(this.readSettings());
-		return this.runSsh([settings.cliPath, ...args], settings, token, options);
-	}
-
 	async testConnection(settings = this.readSettings(), token?: vscode.CancellationToken): Promise<string> {
 		const valid = this.validate(settings);
-		const result = await this.runSsh(['sh', '-c', 'printf "Redbrick Pi: "; uname -srmo; printf "Arduino CLI: "; command -v "$1"; "$1" version', 'redbrick-test', valid.cliPath], valid, token, { revealOutput: true, streamOutput: true });
+		const command = 'printf "Redbrick Pi Bridge: "; uname -srmo; printf "Serial ports: "; python3 -m serial.tools.list_ports -q | wc -l; python3 -m esptool version; command -v avrdude; command -v openocd';
+		const result = await this.runSsh(['sh', '-c', command], valid, token, { revealOutput: true, streamOutput: true });
 		return result.stdout.trim();
 	}
 
-	async stageSketch(localSketchPath: string, token: vscode.CancellationToken, report: (message: string) => void): Promise<IRemoteSketchSession> {
+	async listPorts(token?: vscode.CancellationToken): Promise<{ readonly detected_ports: readonly IArduinoPort[] }> {
+		const script = [
+			'import json',
+			'from serial.tools import list_ports',
+			'ports=[]',
+			'for p in list_ports.comports():',
+			' props={}',
+			' if p.vid is not None: props["vid"]=f"{p.vid:04X}"',
+			' if p.pid is not None: props["pid"]=f"{p.pid:04X}"',
+			' ports.append({"port":{"address":p.device,"label":p.description or p.device,"protocol":"serial","protocol_label":"Serial Port","properties":props},"matching_boards":[]})',
+			'print(json.dumps({"detected_ports":ports}))'
+		].join('\n');
+		const result = await this.runSsh(['python3', '-c', script], this.validate(this.readSettings()), token, { revealOutput: false, streamOutput: false, logCommand: false });
+		return JSON.parse(result.stdout) as { readonly detected_ports: readonly IArduinoPort[] };
+	}
+
+	runCommand(command: readonly string[], token?: vscode.CancellationToken, options: IRemoteRunOptions = {}): Promise<IRemoteCommandResult> {
+		return this.runSsh(command, this.validate(this.readSettings()), token, options);
+	}
+
+	async stageArtifacts(localFiles: readonly string[], token: vscode.CancellationToken, report: (message: string) => void): Promise<IRemoteArtifactSession> {
+		if (!localFiles.length) { throw new Error(vscode.l10n.t('No compiled firmware artifacts were found to send to Raspberry Pi.')); }
 		const settings = this.validate(this.readSettings());
 		const jobRoot = posix.join(settings.temporaryRoot, `job-${randomUUID()}`);
-		const sketchName = basename(localSketchPath);
-		const remoteSketchPath = posix.join(jobRoot, sketchName);
 		const buildPath = posix.join(jobRoot, 'build');
-		report(vscode.l10n.t('Creating a temporary workspace on Raspberry Pi…'));
-		await this.runSsh(['mkdir', '-p', jobRoot, buildPath], settings, token, { revealOutput: false });
+		report(vscode.l10n.t('Creating a temporary upload workspace on Raspberry Pi…'));
+		await this.runSsh(['mkdir', '-p', buildPath], settings, token, { revealOutput: false });
 		try {
-			report(vscode.l10n.t('Synchronizing sketch to Raspberry Pi…'));
-			await this.runProcess('scp', [...this.connectionArguments(settings, true), '-r', localSketchPath, `${this.target(settings)}:${jobRoot}/`], token, { revealOutput: true, streamOutput: true, logCommand: true });
+			report(vscode.l10n.t('Sending compiled firmware to Raspberry Pi…'));
+			await this.runProcess('scp', [...this.connectionArguments(settings, true), ...localFiles, `${this.target(settings)}:${buildPath}/`], token, { revealOutput: true, streamOutput: true, logCommand: true });
 		} catch (error) {
 			await this.cleanup(jobRoot, settings);
 			throw error;
 		}
 		let cleaned = false;
 		return {
-			sketchPath: remoteSketchPath,
 			buildPath,
 			cleanup: async () => {
 				if (cleaned) { return; }
 				cleaned = true;
-				report(vscode.l10n.t('Removing temporary files from Raspberry Pi…'));
+				report(vscode.l10n.t('Removing temporary firmware from Raspberry Pi…'));
 				await this.cleanup(jobRoot, settings);
 			}
 		};
+	}
+
+	remoteArtifactPath(buildPath: string, localFile: string): string {
+		return posix.join(buildPath, basename(localFile));
 	}
 
 	private async cleanup(jobRoot: string, settings: IRaspberryPiSettings): Promise<void> {
@@ -139,7 +155,7 @@ export class RaspberryPiService {
 				cancellation?.dispose();
 				if (logCommand || streamOutput) { this.output.appendLine(''); }
 				if (token?.isCancellationRequested) { reject(new Error(vscode.l10n.t('Raspberry Pi operation was cancelled.'))); return; }
-				if (code !== 0) { reject(new Error((stderr.trim() || stdout.trim() || vscode.l10n.t('Process exited with code {0}.', code ?? -1)))); return; }
+				if (code !== 0) { reject(new Error(stderr.trim() || stdout.trim() || vscode.l10n.t('Process exited with code {0}.', code ?? -1))); return; }
 				resolve({ stdout, stderr });
 			});
 		});

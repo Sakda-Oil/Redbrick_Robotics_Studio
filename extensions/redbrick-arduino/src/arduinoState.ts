@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 import { ArduinoCli } from './cli/arduinoCli';
+import { RaspberryPiService } from './remote/raspberryPiService';
 import { baseFqbn, composeFqbn, findBoardByFqbn, optionDefaults, parseFqbnOptions } from './boardModel';
 import { IArduinoBoard, IArduinoBoardDetails, IArduinoBoardOption, IArduinoPlatformSuggestion, IArduinoPort, IArduinoProjectConfiguration, IArduinoStateSnapshot } from './arduinoTypes';
 
@@ -38,7 +39,7 @@ export class ArduinoState implements vscode.Disposable {
 	private lastError: string | undefined;
 	private refreshingPorts: Promise<void> | undefined;
 
-	constructor(private readonly cli: ArduinoCli) {
+	constructor(private readonly cli: ArduinoCli, private readonly raspberryPi?: RaspberryPiService) {
 		this.disposables.push(vscode.workspace.onDidChangeWorkspaceFolders(() => void this.initialize()));
 		this.disposables.push(vscode.window.onDidChangeWindowState(event => { if (event.focused) { void this.refreshPorts(true); } }));
 	}
@@ -108,7 +109,9 @@ export class ArduinoState implements vscode.Disposable {
 			this.emit();
 		}
 		try {
-			const result = await this.cli.runJson<IPortList>(['board', 'list', '--format', 'json']);
+			const result = this.raspberryPi?.isEnabled
+				? await this.raspberryPi.listPorts()
+				: await this.cli.runJson<IPortList>(['board', 'list', '--format', 'json']);
 			this.ports = [...(result.detected_ports ?? [])].sort((left, right) => left.port.address.localeCompare(right.port.address, undefined, { numeric: true }));
 			if (this.port || this.missingPort) {
 				const address = this.port?.port.address ?? this.missingPort;

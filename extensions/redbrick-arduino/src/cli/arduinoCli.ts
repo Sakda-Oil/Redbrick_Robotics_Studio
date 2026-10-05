@@ -60,9 +60,6 @@ export class ArduinoCli {
 	}
 
 	run(args: readonly string[], token?: vscode.CancellationToken, cwd?: string, options: IArduinoCliRunOptions = {}): Promise<IArduinoCliResult> {
-		if (this.raspberryPi?.isEnabled) {
-			return this.raspberryPi.runCli(args, token, options);
-		}
 		const executable = this.resolveExecutable();
 		const revealOutput = options.revealOutput ?? true;
 		const streamOutput = options.streamOutput ?? true;

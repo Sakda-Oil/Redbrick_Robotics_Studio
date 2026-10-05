@@ -213,24 +213,25 @@ npm run compile
 
 การเพิ่ม command ใหม่ต้องทำครบทั้ง registration ใน TypeScript, `contributes.commands`/menus ใน `extensions/redbrick-arduino/package.json` และข้อความ localization ใน `package.nls*.json` ถ้ามีข้อความที่ผู้ใช้เห็น
 
-### Remote Upload ผ่าน Raspberry Pi 5
+### Raspberry Pi 5 USB Bridge
 
-โครงสร้าง Remote Upload ต่อ transport เพิ่มใต้ระบบเดิม ไม่ได้สร้าง Board/Port/Compile/Upload อีกชุด:
+โครงสร้าง Bridge ต่อ transport เพิ่มใต้ระบบเดิม ไม่ได้สร้าง Board/Compile/Library อีกชุด:
 
 ```text
 ArduinoController
   -> ArduinoState / ArduinoManager / BoardSelector (ชุดเดิม)
   -> ArduinoCli
        -> local process เมื่อ Upload Mode = Local
-       -> RaspberryPiService -> ssh/scp เมื่อ Upload Mode = Raspberry Pi
+       -> Compile ด้วย ArduinoCli ในเครื่อง Studio
+       -> RaspberryPiService -> ส่ง firmware ด้วย ssh/scp -> USB เมื่อ Upload Mode = Raspberry Pi
 ```
 
 ไฟล์ที่เกี่ยวข้อง:
 
-- `src/remote/raspberryPiService.ts`: SSH key-only transport, Arduino CLI บน Pi, sync และ cleanup
+- `src/remote/raspberryPiService.ts`: SSH key-only transport, ตรวจ serial port บน Pi, ส่ง firmware และ cleanup
 - `src/remote/raspberryPiConfigurationPanel.ts`: ตั้งค่า IP/hostname, username, key, port และ Test Connection
 - `src/remote/remoteUploadAdapter.ts`: adapter boundary ของ ESP32, ESP8266, AVR และเส้นทาง OpenOCD-ready สำหรับ STM32/RP2040
-- `scripts/setup_pi.sh`: provision Raspberry Pi OS และลง cores เริ่มต้น
+- `scripts/setup_pi.sh`: provision เฉพาะ SSH, serial access และ uploader ขนาดเล็ก ไม่ลง Arduino core/compiler
 
 เตรียม Raspberry Pi:
 
@@ -250,7 +251,7 @@ ssh pi@raspberrypi.local arduino-cli board list
 
 บน Windows ที่ไม่มี `ssh-copy-id` ให้คัดลอกเนื้อหา `%USERPROFILE%\.ssh\id_ed25519.pub` ไปต่อท้าย `~/.ssh/authorized_keys` บน Pi และตั้ง permission เป็น `700` สำหรับ `.ssh`, `600` สำหรับ `authorized_keys`
 
-ใน Studio เปิด **Redbrick Arduino: Configure Raspberry Pi Upload** แล้วเลือก Raspberry Pi กรอก host, username และ private key จากนั้นกด **Test Connection** เมื่อเลือกโหมดนี้ Board Manager, Library Manager, Board/Port discovery, Verify และ Upload จะใช้ `arduino-cli` บน Pi ส่วน sketch ถูกคัดลอกไป `/tmp/redbrick-arduino/job-<uuid>` และลบใน `finally` ทั้งกรณีสำเร็จ ล้มเหลว หรือยกเลิก
+ใน Studio เปิด **Redbrick Arduino: Configure Raspberry Pi Upload** แล้วเลือก **Raspberry Pi Bridge** กรอก host, username และ private key จากนั้นกด **Test Connection** Board Manager, Library Manager, Board discovery, micro-ROS/ไลบรารี และ Verify ใช้ `arduino-cli` ในเครื่อง Studio ทั้งหมด เฉพาะ serial-port discovery กับการส่ง firmware ลง USB เท่านั้นที่ทำบน Pi ไฟล์ `.bin`/`.hex` ถูกคัดลอกไป `/tmp/redbrick-arduino/job-<uuid>` และลบใน `finally` ทั้งกรณีสำเร็จ ล้มเหลว หรือยกเลิก
 
 ระบบไม่รับและไม่บันทึก SSH password ถ้า Test Connection แจ้ง host key ให้เชื่อมด้วย `ssh` ใน Terminal หนึ่งครั้งเพื่อตรวจ fingerprint ก่อน ถ้า port busy ให้ตรวจ `arduino-cli board list`, membership ของกลุ่ม `dialout` และโปรแกรมอื่นที่กำลังเปิด `/dev/ttyUSB*` หรือ `/dev/ttyACM*`
 

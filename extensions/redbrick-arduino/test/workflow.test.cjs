@@ -83,14 +83,18 @@ test('Arduino symbols support Ctrl+Click and F12 definition navigation', () => {
 	assert.match(fs.readFileSync(path.join(extensionRoot, 'src', 'extension.ts'), 'utf8'), /registerDefinitionProvider/);
 });
 
-test('Raspberry Pi remote upload reuses Arduino CLI state and uses key-only SSH', () => {
+test('Raspberry Pi bridge compiles locally and uses key-only SSH for firmware transport', () => {
 	const properties = manifest.contributes.configuration.properties;
 	assert.deepEqual(properties['redbrickArduino.upload.mode'].enum, ['local', 'raspberryPi']);
 	assert.equal(properties['redbrickArduino.remote.password'], undefined);
+	assert.equal(properties['redbrickArduino.remote.cliPath'], undefined);
 	assert.match(raspberryPiService, /BatchMode=yes/);
-	assert.match(raspberryPiService, /stageSketch/);
+	assert.match(raspberryPiService, /stageArtifacts/);
+	assert.match(raspberryPiService, /serial\.tools\.list_ports/);
 	assert.match(raspberryPiService, /job-\$\{randomUUID\(\)\}/);
 	assert.match(raspberryPiService, /rm', '-rf', '--'/);
 	assert.match(controller, /this\.cli\.isRemoteMode/);
-	assert.match(controller, /remoteUploadAdapterFor/);
+	assert.match(controller, /remoteUploadPlanFor/);
+	assert.match(controller, /Compiling \{0\} locally/);
+	assert.doesNotMatch(controller, /Compiling on Raspberry Pi/);
 });

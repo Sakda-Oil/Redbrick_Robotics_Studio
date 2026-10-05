@@ -5,8 +5,10 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const { composeFqbn, filterBoards, findBoardByFqbn, isLikelyUploadPort, parseFqbnOptions } = require('../out/boardModel.js');
-const { remoteUploadAdapterFor } = require('../out/remote/remoteUploadAdapter.js');
+const { remoteUploadPlanFor } = require('../out/remote/remoteUploadAdapter.js');
 
 test('board selection survives dynamic option suffixes', () => {
 	const boards = [{ name: 'ESP32 Dev Module', fqbn: 'esp32:esp32:esp32' }];
@@ -32,19 +34,42 @@ test('Bluetooth virtual COM ports are not treated as connected upload boards', (
 	assert.equal(isLikelyUploadPort({ port: { address: 'COM13', protocol_label: 'Serial Port', properties: { vid: '10C4', pid: 'EA60' } } }), true);
 });
 
-test('remote upload adapters cover initial and OpenOCD-ready board families', () => {
-	const esp32 = remoteUploadAdapterFor('esp32:esp32:esp32');
-	assert.deepEqual([
-		esp32.family,
-		remoteUploadAdapterFor('esp8266:esp8266:nodemcuv2').family,
-		remoteUploadAdapterFor('arduino:avr:uno').family,
-		remoteUploadAdapterFor('STMicroelectronics:stm32:GenF4').openOcdReady,
-		remoteUploadAdapterFor('rp2040:rp2040:rpipico').openOcdReady,
-		esp32.compileArgs('esp32:esp32:esp32', '/tmp/job/build', '/tmp/job/Blink'),
-		esp32.uploadArgs('esp32:esp32:esp32', '/tmp/job/build', '/tmp/job/Blink', '/dev/ttyUSB0', [])
-	], [
-		'esp32', 'esp8266', 'avr', true, true,
-		['compile', '--fqbn', 'esp32:esp32:esp32', '--build-path', '/tmp/job/build', '/tmp/job/Blink'],
-		['upload', '--port', '/dev/ttyUSB0', '--fqbn', 'esp32:esp32:esp32', '--input-dir', '/tmp/job/build', '/tmp/job/Blink']
+test('remote bridge creates an esptool plan from locally compiled ESP32 firmware', t => {
+	const os = require('node:os');
+	const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'redbrick-bridge-test-'));
+	t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+	fs.writeFileSync(path.join(directory, 'Blink.ino.merged.bin'), 'firmware');
+	const plan = remoteUploadPlanFor('esp32:esp32:esp32:UploadSpeed=460800', directory);
+	assert.equal(plan.family, 'esp32');
+	assert.deepEqual(plan.localFiles.map(file => path.basename(file)), ['Blink.ino.merged.bin']);
+	assert.deepEqual(plan.command('/tmp/job/build', '/dev/ttyUSB0'), [
+		'python3', '-m', 'esptool', '--chip', 'auto', '--port', '/dev/ttyUSB0', '--baud', '460800', '--before', 'default-reset', '--after', 'hard-reset', 'write-flash', '0x0', '/tmp/job/build/Blink.ino.merged.bin'
+	]);
+});
+
+test('remote bridge supports locally compiled ESP8266 and AVR firmware', t => {
+	const os = require('node:os');
+	const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'redbrick-bridge-families-'));
+	t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+	fs.writeFileSync(path.join(directory, 'Wifi.ino.bin'), 'firmware');
+	const esp8266 = remoteUploadPlanFor('esp8266:esp8266:nodemcuv2', directory);
+	assert.equal(esp8266.family, 'esp8266');
+	assert.deepEqual(esp8266.command('/tmp/build', '/dev/ttyUSB0').slice(0, 9), ['python3', '-m', 'esptool', '--chip', 'esp8266', '--port', '/dev/ttyUSB0', '--baud', '460800']);
+
+	fs.writeFileSync(path.join(directory, 'Blink.ino.hex'), 'firmware');
+	const avr = remoteUploadPlanFor('arduino:avr:uno', directory);
+	assert.equal(avr.family, 'avr');
+	assert.deepEqual(avr.command('/tmp/build', '/dev/ttyACM0').slice(0, 8), ['avrdude', '-V', '-p', 'atmega328p', '-c', 'arduino', '-P', '/dev/ttyACM0']);
+});
+
+test('remote bridge supports 3rd party vendor ESP32 boards such as RB_Nexus', t => {
+	const os = require('node:os');
+	const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'redbrick-bridge-rbnexus-'));
+	t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+	fs.writeFileSync(path.join(directory, 'Blink.ino.merged.bin'), 'firmware');
+	const plan = remoteUploadPlanFor('RB_Nexus:esp32:rb_nexus:UploadSpeed=921600', directory);
+	assert.equal(plan.family, 'esp32');
+	assert.deepEqual(plan.command('/tmp/job/build', '/dev/ttyUSB0'), [
+		'python3', '-m', 'esptool', '--chip', 'auto', '--port', '/dev/ttyUSB0', '--baud', '921600', '--before', 'default-reset', '--after', 'hard-reset', 'write-flash', '0x0', '/tmp/job/build/Blink.ino.merged.bin'
 	]);
 });

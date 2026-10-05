@@ -44,9 +44,9 @@ Open the Command Palette with `Ctrl+Shift+P`, type `Redbrick Arduino`, and then:
 
 The built-in extension automatically discovers Arduino CLI from Arduino IDE installations and uses the same Arduino sketchbook, core, board-package, and library locations. The CLI executable can be overridden with the `redbrickArduino.cli.path` setting.
 
-### Raspberry Pi 5 Remote Upload
+### Raspberry Pi 5 USB Bridge
 
-Redbrick can keep the editor on Windows, macOS, or Linux while compiling and uploading through a USB board connected to Raspberry Pi 5. Open **Redbrick Arduino: Configure Raspberry Pi Upload**, select **Raspberry Pi**, enter the Pi host, username, and SSH private-key path, then use **Test Connection**. Board and port discovery, Board Manager, Verify, and Upload continue through the existing Arduino CLI workflow, but execute on the Pi. Passwords are never stored.
+Redbrick compiles sketches, libraries, and micro-ROS packages on Windows, macOS, or Linux, then sends only the compiled firmware over SSH to a USB board connected to Raspberry Pi 5. Open **Redbrick Arduino: Configure Raspberry Pi Upload**, select **Raspberry Pi Bridge**, enter the Pi host, username, and SSH private-key path, then use **Test Connection**. Board Manager, Library Manager, and Verify stay local; serial-port discovery and the final USB transfer run on the Pi. Passwords are never stored.
 
 Provision a Raspberry Pi with:
 
@@ -54,7 +54,7 @@ Provision a Raspberry Pi with:
 sudo ./scripts/setup_pi.sh
 ```
 
-The first supported families are Arduino AVR, ESP32, and ESP8266. STM32 and RP2040 are routed through an OpenOCD-ready adapter boundary while continuing to use their Arduino core upload recipes.
+The first supported bridge upload families are Arduino AVR, ESP32, and ESP8266. STM32 and RP2040 retain an OpenOCD adapter boundary for a later transport implementation. The Pi does not install Arduino board cores or compile source code.
 
 ## Extension gallery
 

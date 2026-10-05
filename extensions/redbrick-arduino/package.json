@@ -2,7 +2,7 @@
   "name": "redbrick-arduino",
   "displayName": "%displayName%",
   "description": "%description%",
-	"version": "0.10.0",
+	"version": "0.11.0",
   "publisher": "redbrickrobotics",
   "license": "MIT",
   "engines": {
@@ -270,12 +270,6 @@
 		  "default": 22,
 		  "scope": "machine",
 		  "description": "%configuration.remote.sshPort%"
-		},
-		"redbrickArduino.remote.cliPath": {
-		  "type": "string",
-		  "default": "arduino-cli",
-		  "scope": "machine",
-		  "description": "%configuration.remote.cliPath%"
 		},
 		"redbrickArduino.remote.temporaryRoot": {
 		  "type": "string",

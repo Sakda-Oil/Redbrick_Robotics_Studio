@@ -1,0 +1,122 @@
+{
+	"name": "redbrick-robot-control",
+	"displayName": "Redbrick Robot Control",
+	"description": "Control and monitor ROS 2 robots over Wi-Fi or LAN.",
+	"version": "0.1.0",
+	"publisher": "redbrickrobotics",
+	"license": "MIT",
+	"engines": {
+		"vscode": "^1.100.0"
+	},
+	"extensionKind": ["workspace"],
+	"capabilities": {
+		"virtualWorkspaces": false,
+		"untrustedWorkspaces": {
+			"supported": false
+		}
+	},
+	"activationEvents": [
+		"onStartupFinished",
+		"onCommand:redbrickRobotControl.open",
+		"onCommand:redbrickRobotControl.exportRobotSetup",
+		"onView:redbrickRobotControl.actions"
+	],
+	"main": "./out/extension",
+	"scripts": {
+		"test": "node --test test/*.test.cjs"
+	},
+	"contributes": {
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "redbrickRobotControl",
+					"title": "Redbrick Robot Control",
+					"icon": "media/robot-control.svg"
+				}
+			]
+		},
+		"views": {
+			"redbrickRobotControl": [
+				{
+					"id": "redbrickRobotControl.actions",
+					"name": "Robot Control"
+				}
+			]
+		},
+		"commands": [
+			{
+				"command": "redbrickRobotControl.open",
+				"title": "Open Robot Control",
+				"category": "Redbrick Robot Control",
+				"icon": "$(dashboard)"
+			},
+			{
+				"command": "redbrickRobotControl.connect",
+				"title": "Connect to Robot",
+				"category": "Redbrick Robot Control",
+				"icon": "$(radio-tower)"
+			},
+			{
+				"command": "redbrickRobotControl.disconnect",
+				"title": "Disconnect Robot",
+				"category": "Redbrick Robot Control",
+				"icon": "$(debug-disconnect)"
+			},
+			{
+				"command": "redbrickRobotControl.emergencyStop",
+				"title": "Emergency Stop",
+				"category": "Redbrick Robot Control",
+				"icon": "$(error)"
+			},
+			{
+				"command": "redbrickRobotControl.exportRobotSetup",
+				"title": "Export Robot Setup Package",
+				"category": "Redbrick Robot Control",
+				"icon": "$(export)"
+			}
+		],
+		"configuration": {
+			"title": "Redbrick Robot Control",
+			"properties": {
+				"redbrickRobotControl.defaultHost": {
+					"type": "string",
+					"default": "",
+					"scope": "machine",
+					"description": "Default robot IP address or hostname."
+				},
+				"redbrickRobotControl.rosbridgePort": {
+					"type": "number",
+					"default": 9090,
+					"minimum": 1,
+					"maximum": 65535,
+					"scope": "machine",
+					"description": "ROS bridge WebSocket port."
+				},
+				"redbrickRobotControl.secureWebSocket": {
+					"type": "boolean",
+					"default": false,
+					"scope": "machine",
+					"description": "Use wss:// instead of ws://."
+				},
+				"redbrickRobotControl.profile": {
+					"type": "string",
+					"enum": ["redbrick-diff-drive-v1", "generic-diff-drive"],
+					"default": "redbrick-diff-drive-v1",
+					"scope": "resource",
+					"description": "Robot topic, frame, and motion profile."
+				},
+				"redbrickRobotControl.deadmanTimeout": {
+					"type": "number",
+					"default": 400,
+					"minimum": 150,
+					"maximum": 3000,
+					"scope": "resource",
+					"description": "Milliseconds before motion is stopped when control commands stop arriving."
+				}
+			}
+		}
+	},
+	"devDependencies": {
+		"@types/node": "24.x"
+	}
+}
