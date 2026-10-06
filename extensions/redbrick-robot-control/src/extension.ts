@@ -12,6 +12,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	context.subscriptions.push(panel);
 	context.subscriptions.push(vscode.window.registerTreeDataProvider('redbrickRobotControl.actions', new RobotActions()));
 	context.subscriptions.push(vscode.commands.registerCommand('redbrickRobotControl.open', () => panel.show()));
+	context.subscriptions.push(vscode.commands.registerCommand('redbrickRobotControl.settings', () => panel.show(true)));
 	context.subscriptions.push(vscode.commands.registerCommand('redbrickRobotControl.connect', () => panel.connectFromCommand()));
 	context.subscriptions.push(vscode.commands.registerCommand('redbrickRobotControl.disconnect', () => panel.disconnect()));
 	context.subscriptions.push(vscode.commands.registerCommand('redbrickRobotControl.exportRobotSetup', () => panel.exportRobotSetup()));

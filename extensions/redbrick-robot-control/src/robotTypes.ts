@@ -18,6 +18,7 @@ export interface IRobotTopics {
 	readonly systemStatus: string;
 	readonly navigationGoal: string;
 	readonly navigationCancel: string;
+	readonly navigationStatus: string;
 }
 
 export interface IRobotServices {

@@ -10,7 +10,8 @@ export class RobotActions implements vscode.TreeDataProvider<vscode.TreeItem> {
 
 	getChildren(): vscode.TreeItem[] {
 		return [
-			this.item('Open Robot Control', 'dashboard', 'redbrickRobotControl.open'),
+			this.item('Open Robot Control Window', 'link-external', 'redbrickRobotControl.open'),
+			this.item('Robot Settings', 'settings-gear', 'redbrickRobotControl.settings'),
 			this.item('Connect to Robot', 'radio-tower', 'redbrickRobotControl.connect'),
 			this.item('Disconnect Robot', 'debug-disconnect', 'redbrickRobotControl.disconnect'),
 			this.item('Export Robot Setup Package', 'export', 'redbrickRobotControl.exportRobotSetup'),

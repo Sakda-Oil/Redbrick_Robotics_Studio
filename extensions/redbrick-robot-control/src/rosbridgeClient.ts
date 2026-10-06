@@ -27,6 +27,7 @@ export class RosbridgeClient {
 	private readonly topics = new Map<string, Set<TopicHandler>>();
 	private readonly pendingServices = new Map<string, { resolve(value: unknown): void; reject(error: Error): void; timer: NodeJS.Timeout }>();
 	private readonly advertisedTopics = new Set<string>();
+	private abortConnect: (() => void) | undefined;
 
 	constructor(private readonly onState: StateHandler, private readonly onProtocolMessage?: (message: IRosbridgeEnvelope) => void) { }
 
@@ -48,19 +49,26 @@ export class RosbridgeClient {
 			const timer = setTimeout(() => {
 				if (settled) { return; }
 				settled = true;
+				this.abortConnect = undefined;
 				socket.close(4000, 'Connection timeout');
 				this.setState('error', 'Connection timed out.');
 				reject(new Error(`Timed out connecting to ${url}.`));
 			}, timeoutMs);
+			this.abortConnect = () => {
+				clearTimeout(timer);
+				if (!settled) { settled = true; reject(new Error('Connection cancelled.')); }
+			};
 			socket.onopen = () => {
-				if (settled) { return; }
+				if (settled || this.socket !== socket) { return; }
 				settled = true;
+				this.abortConnect = undefined;
 				clearTimeout(timer);
 				this.setState('connected', url);
 				resolve();
 			};
-			socket.onmessage = event => this.handle(event.data);
+			socket.onmessage = event => { if (this.socket === socket) { this.handle(event.data); } };
 			socket.onerror = () => {
+				if (this.socket !== socket) { return; }
 				if (!settled) {
 					settled = true;
 					clearTimeout(timer);
@@ -70,7 +78,10 @@ export class RosbridgeClient {
 			};
 			socket.onclose = event => {
 				clearTimeout(timer);
-				if (this.socket === socket) { this.socket = undefined; }
+				if (!settled) { settled = true; reject(new Error(`Connection closed before opening (${event.code}).`)); }
+				if (this.socket !== socket) { return; }
+				this.abortConnect = undefined;
+				this.socket = undefined;
 				this.rejectPending(`Connection closed (${event.code}${event.reason ? `: ${event.reason}` : ''}).`);
 				if (this.state !== 'disconnected') { this.setState('disconnected', event.reason || 'Connection closed.'); }
 			};
@@ -78,6 +89,8 @@ export class RosbridgeClient {
 	}
 
 	disconnect(notify = true): void {
+		this.abortConnect?.();
+		this.abortConnect = undefined;
 		const socket = this.socket;
 		this.socket = undefined;
 		this.topics.clear();

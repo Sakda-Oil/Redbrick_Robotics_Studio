@@ -18,7 +18,8 @@ const common = {
 		logs: '/rosout',
 		systemStatus: '/redbrick/system_status',
 		navigationGoal: '/redbrick/navigation_goal',
-		navigationCancel: '/redbrick/cancel_navigation'
+		navigationCancel: '/redbrick/cancel_navigation',
+		navigationStatus: '/redbrick/navigation_status'
 	},
 	services: {
 		saveMap: '/map_saver/save_map',

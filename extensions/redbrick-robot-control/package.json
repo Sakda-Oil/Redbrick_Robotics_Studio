@@ -2,7 +2,7 @@
 	"name": "redbrick-robot-control",
 	"displayName": "Redbrick Robot Control",
 	"description": "Control and monitor ROS 2 robots over Wi-Fi or LAN.",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"publisher": "redbrickrobotics",
 	"license": "MIT",
 	"engines": {
@@ -23,7 +23,8 @@
 	],
 	"main": "./out/extension",
 	"scripts": {
-		"test": "node --test test/*.test.cjs"
+		"test": "node --test test/*.test.cjs",
+		"test:ui": "node --test test/robotControl.ui.cjs"
 	},
 	"contributes": {
 		"viewsContainers": {
@@ -46,9 +47,15 @@
 		"commands": [
 			{
 				"command": "redbrickRobotControl.open",
-				"title": "Open Robot Control",
+				"title": "Open Robot Control Window",
 				"category": "Redbrick Robot Control",
-				"icon": "$(dashboard)"
+				"icon": "$(link-external)"
+			},
+			{
+				"command": "redbrickRobotControl.settings",
+				"title": "Robot Settings",
+				"category": "Redbrick Robot Control",
+				"icon": "$(settings-gear)"
 			},
 			{
 				"command": "redbrickRobotControl.connect",
@@ -78,6 +85,12 @@
 		"configuration": {
 			"title": "Redbrick Robot Control",
 			"properties": {
+				"redbrickRobotControl.robotSettings": {
+					"type": "object",
+					"default": {},
+					"scope": "machine",
+					"description": "Connection, topic, service and speed settings saved from the Robot Control Settings page."
+				},
 				"redbrickRobotControl.defaultHost": {
 					"type": "string",
 					"default": "",

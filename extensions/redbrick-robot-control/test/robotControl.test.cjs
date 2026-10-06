@@ -80,12 +80,47 @@ test('rosbridge client connects, subscribes, publishes, calls services, and canc
 });
 
 test('robot control UI exposes every requested page and safety control', () => {
-	const { robotControlHtml } = require('../out/robotControlWebview.js');
-	const html = robotControlHtml({ cspSource: 'vscode-webview:' });
+	const fs = require('node:fs');
+	const vm = require('node:vm');
+	const path = require('node:path');
+	const module = { exports: {} };
+	const vscode = { l10n: { t: value => value }, Uri: { joinPath: (base, ...parts) => path.join(base, ...parts) } };
+	vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../out/robotControlWebview.js'), 'utf8'), { exports: module.exports, require: name => name === 'vscode' ? vscode : require(name) });
+	const html = module.exports.robotControlHtml({ cspSource: 'vscode-webview:', asWebviewUri: value => value }, '/extension');
 	for (const page of ['Dashboard', 'Remote Control', 'Camera', 'Mapping', 'Navigation', 'Sensors', 'System']) {
 		assert.match(html, new RegExp(`>${page}<`));
 	}
 	assert.match(html, /Emergency Stop/);
-	assert.match(html, /pointerup/);
-	assert.match(html, /keyup/);
+	assert.match(html, /robot-control.js/);
+	assert.match(html, /settingsForm/);
+	new vm.Script(fs.readFileSync(path.join(__dirname, '../media/robot-control.js'), 'utf8'));
+});
+
+test('robot settings validate names, finite speeds and IPv6 endpoints without mutating base profiles', () => {
+	const { validateRobotSettings, configuredProfile, robotUrl } = require('../out/robotConfiguration.js');
+	const settings = validateRobotSettings({ host: '[::1]', port: 9090, secure: true, profileId: 'generic-diff-drive', customization: { topics: { cmdVel: '/robot/cmd_vel' }, limits: { linear: 0.2 } } });
+	assert.equal(robotUrl(settings), 'wss://[::1]:9090');
+	assert.equal(configuredProfile(settings).topics.cmdVel, '/robot/cmd_vel');
+	assert.equal(robotProfile('generic-diff-drive').topics.cmdVel, '/cmd_vel');
+	assert.throws(() => validateRobotSettings({ ...settings, port: 0 }));
+	assert.throws(() => validateRobotSettings({ ...settings, host: 'ws://robot:9090' }));
+	assert.throws(() => validateRobotSettings({ ...settings, customization: { limits: { linear: Infinity } } }));
+	assert.throws(() => validateRobotSettings({ ...settings, customization: { topics: { cmdVel: '/bad topic' } } }));
+});
+
+test('late close from a previous WebSocket cannot disconnect the current robot', async () => {
+	const client = new RosbridgeClient(() => {});
+	await client.connect('ws://first:9090');
+	const oldSocket = MockWebSocket.instances.at(-1);
+	await client.connect('ws://second:9090');
+	oldSocket.onclose({ code: 1006, reason: 'late close' });
+	assert.equal(client.isConnected, true);
+	client.disconnect();
+});
+
+test('disconnect during connection rejects the pending promise immediately', async () => {
+	const client = new RosbridgeClient(() => {});
+	const pending = client.connect('ws://offline:9090');
+	client.disconnect();
+	await assert.rejects(pending, /cancelled/);
 });

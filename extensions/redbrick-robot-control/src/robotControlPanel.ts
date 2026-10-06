@@ -7,11 +7,15 @@ import { Buffer } from 'buffer';
 import * as vscode from 'vscode';
 import { RosbridgeClient } from './rosbridgeClient';
 import { robotControlHtml } from './robotControlWebview';
-import { robotProfile, robotProfiles } from './robotProfiles';
-import { IRobotConnectionSettings, IRobotProfile, RobotConnectionState } from './robotTypes';
+import { robotProfiles } from './robotProfiles';
+import { IRobotProfile, RobotConnectionState } from './robotTypes';
+import { configuredProfile, IRobotCustomization, ISavedRobotSettings, robotUrl, validateRobotSettings } from './robotConfiguration';
 
 interface IWebviewMessage {
-	readonly type: 'ready' | 'connect' | 'disconnect' | 'motion' | 'emergencyStop' | 'releaseEmergencyStop' | 'slam' | 'saveMap' | 'navigate' | 'cancelNavigation' | 'refreshGraph' | 'exportLog' | 'saveSnapshot';
+	readonly type: 'ready' | 'connect' | 'disconnect' | 'motion' | 'emergencyStop' | 'releaseEmergencyStop' | 'slam' | 'saveMap' | 'navigate' | 'cancelNavigation' | 'refreshGraph' | 'exportLog' | 'saveSnapshot' | 'saveSettings' | 'testConnection' | 'exportSetup';
+	readonly secure?: boolean;
+	readonly customization?: IRobotCustomization;
+	readonly format?: string;
 	readonly host?: string;
 	readonly port?: number;
 	readonly profileId?: string;
@@ -41,29 +45,54 @@ export class RobotControlPanel implements vscode.Disposable {
 	private motionActive = false;
 	private emergencyStopped = false;
 	private readonly deadmanTimer: NodeJS.Timeout;
+	private opening: Promise<void> | undefined;
+	private pendingPage: string | undefined;
+	private testing = false;
 
 	constructor(private readonly context: vscode.ExtensionContext) {
-		this.profile = robotProfile(vscode.workspace.getConfiguration('redbrickRobotControl').get('profile', 'redbrick-diff-drive-v1'));
+		this.profile = configuredProfile(this.settings());
 		this.deadmanTimer = setInterval(() => {
 			const timeout = vscode.workspace.getConfiguration('redbrickRobotControl').get<number>('deadmanTimeout', 400);
 			if (this.motionActive && Date.now() - this.lastMotionAt > timeout) { this.publishStop('Dead-man timeout'); }
 		}, 100);
 	}
 
-	show(): void {
-		if (this.panel) { this.panel.reveal(vscode.ViewColumn.Active); void this.postInitial(); return; }
-		const panel = vscode.window.createWebviewPanel('redbrickRobotControl.panel', vscode.l10n.t('Redbrick Robot Control'), vscode.ViewColumn.Active, { enableScripts: true, retainContextWhenHidden: true });
+	async show(settingsPage = false): Promise<void> {
+		if (settingsPage) { this.pendingPage = 'settings'; }
+		if (this.opening) { await this.opening; return; }
+		if (this.panel) { this.panel.reveal(); await this.postInitial(); return; }
+		const panel = vscode.window.createWebviewPanel('redbrickRobotControl.panel', vscode.l10n.t('Redbrick Robot Control'), vscode.ViewColumn.Active, { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'media')] });
 		this.panel = panel;
-		panel.webview.html = robotControlHtml(panel.webview);
-		panel.webview.onDidReceiveMessage(message => void this.handle(message as IWebviewMessage).catch(error => this.reportError(error)));
-		panel.onDidDispose(() => {
-			this.publishStop('Control window closed');
-			this.panel = undefined;
+		panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'robot-control.svg');
+		let ready: () => void = () => { };
+		const loaded = new Promise<void>(resolve => { ready = resolve; });
+		const messages = panel.webview.onDidReceiveMessage(message => {
+			if (message?.type === 'ready') { ready(); }
+			void this.handle(message as IWebviewMessage).catch(error => this.reportError(error));
 		});
+		const viewState = panel.onDidChangeViewState(event => { if (!event.webviewPanel.active) { this.publishStop('Control window inactive'); } });
+		const closed = panel.onDidDispose(() => {
+			this.disconnect();
+			this.panel = undefined;
+			messages.dispose(); viewState.dispose(); closed.dispose(); ready();
+		});
+		panel.webview.html = robotControlHtml(panel.webview, this.context.extensionUri);
+		this.opening = (async () => {
+			let timer: NodeJS.Timeout | undefined;
+			await Promise.race([loaded, new Promise<void>(resolve => { timer = setTimeout(resolve, 5000); })]);
+			clearTimeout(timer);
+			if (this.panel !== panel) { return; }
+			const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
+			if (!(activeTab?.input instanceof vscode.TabInputWebview) || !activeTab.input.viewType.endsWith('redbrickRobotControl.panel')) {
+				throw new Error(vscode.l10n.t('Robot Control could not be detached because another editor became active. Use Move Editor into New Window from its tab menu.'));
+			}
+			await vscode.commands.executeCommand('workbench.action.moveEditorToNewWindow');
+		})().catch(error => this.reportError(error)).finally(() => { this.opening = undefined; });
+		await this.opening;
 	}
 
 	async connectFromCommand(): Promise<void> {
-		this.show();
+		await this.show();
 		const settings = this.settings();
 		if (settings.host) { await this.connect(settings); }
 		else { await this.post({ type: 'notice', message: vscode.l10n.t('Enter the robot IP address, then click Connect.'), error: true }); }
@@ -93,8 +122,10 @@ export class RobotControlPanel implements vscode.Disposable {
 	}
 
 	emergencyStop(): void {
-		if (!this.client.isConnected) { this.show(); return; }
 		this.emergencyStopped = true;
+		void this.post({ type: 'safety', emergencyStopped: true });
+		if (!this.client.isConnected) { return; }
+		this.client.publish(this.profile.topics.navigationCancel, 'std_msgs/msg/Empty', {});
 		this.publishStop('Emergency stop');
 		for (let index = 0; index < 3; index++) {
 			this.client.publish(this.profile.topics.emergencyStop, 'std_msgs/msg/Bool', { data: true });
@@ -112,6 +143,9 @@ export class RobotControlPanel implements vscode.Disposable {
 	private async handle(message: IWebviewMessage): Promise<void> {
 		switch (message.type) {
 			case 'ready': await this.postInitial(); break;
+			case 'saveSettings': await this.saveSettings(this.validateSettings(message)); break;
+			case 'testConnection': await this.testConnection(message); break;
+			case 'exportSetup': await this.exportRobotSetup(); break;
 			case 'connect': await this.connect(this.validateSettings(message)); break;
 			case 'disconnect': this.disconnect(); break;
 			case 'motion': this.publishMotion(Number(message.linear) || 0, Number(message.angular) || 0); break;
@@ -123,22 +157,19 @@ export class RobotControlPanel implements vscode.Disposable {
 			case 'cancelNavigation': this.cancelNavigation(); break;
 			case 'refreshGraph': await this.refreshGraph(); break;
 			case 'exportLog': await this.exportText(message.text || ''); break;
-			case 'saveSnapshot': await this.saveSnapshot(message.data || ''); break;
+			case 'saveSnapshot': await this.saveSnapshot(message.data || '', message.format); break;
 		}
 	}
 
-	private async connect(settings: IRobotConnectionSettings): Promise<void> {
+	private async connect(settings: ISavedRobotSettings): Promise<void> {
+		if (this.connectionState === 'connecting') { return; }
 		if (this.client.isConnected) { this.disconnect(); }
-		this.profile = robotProfile(settings.profileId);
-		const configuration = vscode.workspace.getConfiguration('redbrickRobotControl');
-		await Promise.all([
-			configuration.update('defaultHost', settings.host, vscode.ConfigurationTarget.Global),
-			configuration.update('rosbridgePort', settings.port, vscode.ConfigurationTarget.Global),
-			configuration.update('profile', this.profile.id, vscode.ConfigurationTarget.Workspace)
-		]);
-		const url = `${settings.secure ? 'wss' : 'ws'}://${settings.host}:${settings.port}`;
+		settings = validateRobotSettings(settings);
+		this.profile = configuredProfile(settings);
+		const url = robotUrl(settings);
 		this.output.appendLine(`Connecting to ${url} with profile ${this.profile.id}`);
 		await this.client.connect(url);
+		if (this.emergencyStopped) { this.emergencyStop(); }
 		this.setupSubscriptions();
 		await this.postInitial();
 		await this.refreshGraph();
@@ -148,6 +179,7 @@ export class RobotControlPanel implements vscode.Disposable {
 		this.clearSubscriptions();
 		const topics = this.profile.topics;
 		this.subscriptionDisposers.push(
+			this.client.subscribe(topics.navigationStatus, 'std_msgs/msg/String', message => void this.post({ type: 'navigation', status: string(record(message).data) })),
 			this.client.subscribe(topics.battery, 'sensor_msgs/msg/BatteryState', message => {
 				const data = record(message);
 				void this.post({ type: 'battery', percentage: number(data.percentage), voltage: number(data.voltage) });
@@ -170,6 +202,7 @@ export class RobotControlPanel implements vscode.Disposable {
 	}
 
 	private publishMotion(linear: number, angular: number): void {
+		if (!Number.isFinite(linear) || !Number.isFinite(angular)) { throw new Error(vscode.l10n.t('Motion values must be finite numbers.')); }
 		if (!this.client.isConnected) { throw new Error(vscode.l10n.t('Connect to the robot before sending motion commands.')); }
 		if (this.emergencyStopped && (linear !== 0 || angular !== 0)) { return; }
 		const limitedLinear = clamp(linear, -this.profile.limits.linear, this.profile.limits.linear);
@@ -192,25 +225,29 @@ export class RobotControlPanel implements vscode.Disposable {
 		this.publishStop('Emergency stop reset');
 		this.client.publish(this.profile.topics.emergencyStop, 'std_msgs/msg/Bool', { data: false });
 		this.emergencyStopped = false;
+		void this.post({ type: 'safety', emergencyStopped: false });
 	}
 
 	private async changeSlam(start: boolean): Promise<void> {
 		this.requireConnection();
 		const transition = start ? { id: 3, label: 'activate' } : { id: 4, label: 'deactivate' };
-		await this.client.callService(this.profile.services.slamLifecycle, 'lifecycle_msgs/srv/ChangeState', { transition });
+		const result = record(await this.client.callService(this.profile.services.slamLifecycle, 'lifecycle_msgs/srv/ChangeState', { transition }));
+		if (result.success !== true) { throw new Error(vscode.l10n.t('SLAM rejected the transition. Check that the lifecycle node is configured.')); }
 		await this.post({ type: 'notice', message: start ? vscode.l10n.t('SLAM mapping started.') : vscode.l10n.t('SLAM mapping stopped.') });
 	}
 
 	private async saveMap(name: string): Promise<void> {
 		this.requireConnection();
 		const safeName = name.replace(/[^A-Za-z0-9_.-]/g, '_');
-		await this.client.callService(this.profile.services.saveMap, 'nav2_msgs/srv/SaveMap', { map_url: safeName, image_format: 'pgm', map_mode: 'trinary', free_thresh: 0.25, occupied_thresh: 0.65 }, 30000);
+		const result = record(await this.client.callService(this.profile.services.saveMap, 'nav2_msgs/srv/SaveMap', { map_topic: this.profile.topics.map, map_url: safeName, image_format: 'pgm', map_mode: 'trinary', free_thresh: 0.25, occupied_thresh: 0.65 }, 30000));
+		if (result.result !== true) { throw new Error(vscode.l10n.t('Map saver could not save the map. Check its map subscription and output directory.')); }
 		await this.post({ type: 'notice', message: vscode.l10n.t('Map saved as {0} on the robot.', safeName) });
 	}
 
 	private navigate(x: number, y: number, yaw: number): void {
 		this.requireConnection();
-		if (!Number.isFinite(x) || !Number.isFinite(y)) { throw new Error(vscode.l10n.t('Select a valid point on the map.')); }
+		if (this.emergencyStopped) { throw new Error(vscode.l10n.t('Reset Emergency Stop before sending navigation goals.')); }
+		if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(yaw)) { throw new Error(vscode.l10n.t('Select a valid point on the map.')); }
 		const now = Date.now();
 		const pose = {
 			header: { frame_id: this.profile.frames.map, stamp: { sec: Math.floor(now / 1000), nanosec: (now % 1000) * 1000000 } },
@@ -224,7 +261,7 @@ export class RobotControlPanel implements vscode.Disposable {
 		this.requireConnection();
 		this.client.publish(this.profile.topics.navigationCancel, 'std_msgs/msg/Empty', {});
 		this.publishStop('Navigation cancelled');
-		void this.post({ type: 'navigation', status: vscode.l10n.t('Navigation cancelled.') });
+		void this.post({ type: 'navigation', status: vscode.l10n.t('Navigation cancellation requested.') });
 	}
 
 	private async refreshGraph(): Promise<void> {
@@ -280,8 +317,10 @@ export class RobotControlPanel implements vscode.Disposable {
 		void this.post({ type: 'connection', state, detail });
 	}
 
-	private settings(): IRobotConnectionSettings {
+	private settings(): ISavedRobotSettings {
 		const configuration = vscode.workspace.getConfiguration('redbrickRobotControl');
+		const saved = configuration.get<ISavedRobotSettings>('robotSettings');
+		if (saved?.profileId) { return saved; }
 		return {
 			host: configuration.get<string>('defaultHost', '').trim(),
 			port: configuration.get<number>('rosbridgePort', 9090),
@@ -290,19 +329,45 @@ export class RobotControlPanel implements vscode.Disposable {
 		};
 	}
 
-	private validateSettings(messageValue: IWebviewMessage): IRobotConnectionSettings {
-		const host = (messageValue.host || '').trim();
-		const port = Number(messageValue.port);
-		if (!/^[A-Za-z0-9._:-]+$/.test(host)) { throw new Error(vscode.l10n.t('Enter a valid robot IP address or hostname.')); }
-		if (!Number.isInteger(port) || port < 1 || port > 65535) { throw new Error(vscode.l10n.t('ROS bridge port must be between 1 and 65535.')); }
-		return { host, port, secure: vscode.workspace.getConfiguration('redbrickRobotControl').get('secureWebSocket', false), profileId: messageValue.profileId || 'redbrick-diff-drive-v1' };
+	private validateSettings(messageValue: IWebviewMessage): ISavedRobotSettings {
+		return validateRobotSettings({ host: messageValue.host || '', port: Number(messageValue.port), secure: Boolean(messageValue.secure), profileId: messageValue.profileId || 'redbrick-diff-drive-v1', customization: messageValue.customization });
+	}
+
+	private async saveSettings(settings: ISavedRobotSettings): Promise<void> {
+		if (this.connectionState === 'connected' || this.connectionState === 'connecting') { throw new Error(vscode.l10n.t('Disconnect before changing robot settings.')); }
+		await vscode.workspace.getConfiguration('redbrickRobotControl').update('robotSettings', settings, vscode.ConfigurationTarget.Global);
+		await this.postInitial();
+		await this.post({ type: 'notice', message: vscode.l10n.t('Robot settings saved. Click Connect when ready.') });
+	}
+
+	private async testConnection(input: IWebviewMessage): Promise<void> {
+		if (this.testing) { return; }
+		this.testing = true;
+		const probe = new RosbridgeClient(() => { });
+		try {
+			const settings = this.validateSettings(input);
+			const profile = configuredProfile(settings);
+			await probe.connect(robotUrl(settings));
+			const [topics, services] = await Promise.all([
+				probe.callService('/rosapi/topics', 'rosapi/srv/Topics', {}),
+				probe.callService('/rosapi/services', 'rosapi/srv/Services', {})
+			]);
+			const names = array(record(topics).topics).map(string);
+			const serviceNames = array(record(services).services).map(string);
+			const missing = [profile.topics.camera, profile.topics.scan, profile.topics.map].filter(name => !names.includes(name));
+			const missingServices = Object.values(profile.services).filter(name => !serviceNames.includes(name));
+			await this.post({ type: 'testResult', message: vscode.l10n.t('Rosbridge connected. {0} topics, {1} services. Missing sensor/map topics: {2}. Missing mapping services: {3}.', names.length, serviceNames.length, missing.join(', ') || 'none', missingServices.join(', ') || 'none') });
+		} catch (error) {
+			await this.post({ type: 'testResult', message: vscode.l10n.t('Connection test failed: {0}', message(error)) });
+		} finally { probe.disconnect(); this.testing = false; }
 	}
 
 	private async postInitial(): Promise<void> {
 		if (!this.panel) { return; }
 		const settings = this.settings();
-		this.profile = robotProfile(settings.profileId);
-		await this.post({ type: 'initial', settings, profile: this.profile, profiles: robotProfiles, connectionState: this.connectionState });
+		if (!this.client.isConnected) { this.profile = configuredProfile(settings); }
+		await this.post({ type: 'initial', settings, profile: this.profile, profiles: robotProfiles, connectionState: this.connectionState, emergencyStopped: this.emergencyStopped, page: this.pendingPage });
+		this.pendingPage = undefined;
 	}
 
 	private post(messageValue: unknown): Thenable<boolean> {
@@ -318,9 +383,10 @@ export class RobotControlPanel implements vscode.Disposable {
 		if (uri) { await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(text)); }
 	}
 
-	private async saveSnapshot(data: string): Promise<void> {
+	private async saveSnapshot(data: string, format?: string): Promise<void> {
 		if (!data) { throw new Error(vscode.l10n.t('No camera frame is available.')); }
-		const uri = await vscode.window.showSaveDialog({ filters: { 'JPEG image': ['jpg', 'jpeg'] }, defaultUri: vscode.Uri.file(`redbrick-camera-${Date.now()}.jpg`) });
+		const extension = format === 'image/png' ? 'png' : 'jpg';
+		const uri = await vscode.window.showSaveDialog({ filters: { 'Camera Image': [extension] }, defaultUri: vscode.Uri.file(`redbrick-camera-${Date.now()}.${extension}`) });
 		if (uri) { await vscode.workspace.fs.writeFile(uri, Buffer.from(data, 'base64')); }
 	}
 
